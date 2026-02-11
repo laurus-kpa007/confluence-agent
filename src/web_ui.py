@@ -42,6 +42,10 @@ class WebUI:
         self.app.router.add_post("/api/extract", self._extract)
         self.app.router.add_post("/api/process", self._process)
         self.app.router.add_post("/api/publish", self._publish)
+        self.app.router.add_get("/api/confluence/spaces", self._list_spaces)
+        self.app.router.add_get("/api/confluence/pages", self._list_pages)
+        self.app.router.add_get("/api/confluence/search", self._search_pages)
+        self.app.router.add_get("/api/confluence/tree", self._page_tree)
         if STATIC_DIR.exists():
             self.app.router.add_static("/static", STATIC_DIR)
 
@@ -142,6 +146,47 @@ class WebUI:
             return web.json_response({"ok": True, **result})
         except Exception as e:
             return web.json_response({"ok": False, "error": str(e)}, status=500)
+
+    async def _list_spaces(self, request):
+        if not self.publisher:
+            return web.json_response({"error": "Confluence not configured"}, status=400)
+        try:
+            spaces = await self.publisher.list_spaces()
+            return web.json_response(spaces)
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def _list_pages(self, request):
+        if not self.publisher:
+            return web.json_response({"error": "Confluence not configured"}, status=400)
+        space = request.query.get("space", "")
+        parent_id = request.query.get("parent_id")
+        try:
+            pages = await self.publisher.list_pages(space, parent_id=parent_id)
+            return web.json_response(pages)
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def _search_pages(self, request):
+        if not self.publisher:
+            return web.json_response({"error": "Confluence not configured"}, status=400)
+        query = request.query.get("q", "")
+        space = request.query.get("space")
+        try:
+            results = await self.publisher.search_pages(query, space_key=space)
+            return web.json_response(results)
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def _page_tree(self, request):
+        if not self.publisher:
+            return web.json_response({"error": "Confluence not configured"}, status=400)
+        space = request.query.get("space", "")
+        try:
+            tree = await self.publisher.get_page_tree(space)
+            return web.json_response(tree)
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
 
     def _wrap_markdown_macro(self, markdown_text: str) -> str:
         """Wrap markdown in Confluence markdown macro."""

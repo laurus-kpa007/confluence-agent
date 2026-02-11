@@ -289,9 +289,16 @@
         </div>
 
         <!-- Publish bar -->
-        <div class="publish-bar">
-          <input type="text" id="pageTitle" placeholder="페이지 제목">
-          <input type="text" id="spaceKey" placeholder="Space" style="width:80px;">
+        <div class="publish-bar" style="flex-wrap:wrap;">
+          <input type="text" id="pageTitle" placeholder="페이지 제목" style="flex:1; min-width:200px;">
+          <select id="spaceSelect" style="width:160px;" onchange="onSpaceChange()">
+            <option value="">Space 선택...</option>
+          </select>
+          <select id="parentSelect" style="width:200px;">
+            <option value="">상위 페이지 (최상위)</option>
+          </select>
+          <input type="text" id="pageSearch" placeholder="🔍 페이지 검색" style="width:150px;"
+                 oninput="debounceSearch()" />
           <div class="format-toggle">
             <button id="fmtMd" class="active" onclick="setPublishFormat('markdown')">MD</button>
             <button id="fmtConf" onclick="setPublishFormat('confluence')">XHTML</button>
@@ -496,7 +503,8 @@
       const body = {
         title,
         body: generatedBody,
-        space: document.getElementById('spaceKey').value.trim() || undefined,
+        space: document.getElementById('spaceSelect').value || undefined,
+        parent_id: document.getElementById('parentSelect').value || undefined,
         use_markdown: publishFormat === 'markdown',
       };
 
@@ -527,8 +535,65 @@
       el.innerHTML = msg;
     }
 
+    // --- Confluence Space/Page ---
+    async function loadSpaces() {
+      try {
+        const resp = await fetch('/api/confluence/spaces');
+        if (!resp.ok) return;
+        const spaces = await resp.json();
+        if (spaces.error) return;
+        const sel = document.getElementById('spaceSelect');
+        sel.innerHTML = '<option value="">Space 선택...</option>' +
+          spaces.map(s => `<option value="${s.key}">${s.key} - ${s.name}</option>`).join('');
+      } catch(e) { /* Confluence not configured */ }
+    }
+
+    async function onSpaceChange() {
+      const space = document.getElementById('spaceSelect').value;
+      const sel = document.getElementById('parentSelect');
+      sel.innerHTML = '<option value="">상위 페이지 (최상위)</option>';
+      if (!space) return;
+
+      try {
+        const resp = await fetch(`/api/confluence/tree?space=${space}`);
+        const tree = await resp.json();
+        if (tree.error) return;
+
+        for (const page of tree) {
+          sel.innerHTML += `<option value="${page.id}">📄 ${page.title}</option>`;
+          if (page.children) {
+            for (const child of page.children) {
+              sel.innerHTML += `<option value="${child.id}">&nbsp;&nbsp;└ ${child.title}</option>`;
+            }
+          }
+        }
+      } catch(e) {}
+    }
+
+    let searchTimeout;
+    function debounceSearch() {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(searchPages, 500);
+    }
+
+    async function searchPages() {
+      const query = document.getElementById('pageSearch').value.trim();
+      if (!query || query.length < 2) return;
+      const space = document.getElementById('spaceSelect').value;
+      const url = `/api/confluence/search?q=${encodeURIComponent(query)}` + (space ? `&space=${space}` : '');
+      try {
+        const resp = await fetch(url);
+        const results = await resp.json();
+        if (results.error) return;
+        const sel = document.getElementById('parentSelect');
+        sel.innerHTML = '<option value="">상위 페이지 (최상위)</option>' +
+          results.map(p => `<option value="${p.id}">🔍 ${p.title}</option>`).join('');
+      } catch(e) {}
+    }
+
     // --- Init ---
     loadTemplates();
+    loadSpaces();
   </script>
 </body>
 </html>
