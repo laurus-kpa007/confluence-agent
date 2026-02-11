@@ -1,0 +1,252 @@
+<style>
+.lx-highlight { position: relative; border-radius:3px; padding:1px 2px;}
+.lx-highlight .lx-tooltip {
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+  background: #333;
+  color: #fff;
+  text-align: left;
+  border-radius: 4px;
+  padding: 6px 8px;
+  position: absolute;
+  z-index: 1000;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  max-width: 240px;
+  white-space: normal;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+.lx-highlight:hover .lx-tooltip { visibility: visible; opacity:1; }
+.lx-animated-wrapper { max-width: 100%; font-family: Arial, sans-serif; }
+.lx-controls {
+  background: #fafafa; border: 1px solid #90caf9; border-radius: 8px;
+  padding: 12px; margin-bottom: 16px;
+}
+.lx-button-row {
+  display: flex; justify-content: center; gap: 8px; margin-bottom: 12px;
+}
+.lx-control-btn {
+  background: #4285f4; color: white; border: none; border-radius: 4px;
+  padding: 8px 16px; cursor: pointer; font-size: 13px; font-weight: 500;
+  transition: background-color 0.2s;
+}
+.lx-control-btn:hover { background: #3367d6; }
+.lx-progress-container {
+  margin-bottom: 8px;
+}
+.lx-progress-slider {
+  width: 100%; margin: 0; appearance: none; height: 6px;
+  background: #ddd; border-radius: 3px; outline: none;
+}
+.lx-progress-slider::-webkit-slider-thumb {
+  appearance: none; width: 18px; height: 18px; background: #4285f4;
+  border-radius: 50%; cursor: pointer;
+}
+.lx-progress-slider::-moz-range-thumb {
+  width: 18px; height: 18px; background: #4285f4; border-radius: 50%;
+  cursor: pointer; border: none;
+}
+.lx-status-text {
+  text-align: center; font-size: 12px; color: #666; margin-top: 4px;
+}
+.lx-text-window {
+  font-family: monospace; white-space: pre-wrap; border: 1px solid #90caf9;
+  padding: 12px; max-height: 260px; overflow-y: auto; margin-bottom: 12px;
+  line-height: 1.6;
+}
+.lx-attributes-panel {
+  background: #fafafa; border: 1px solid #90caf9; border-radius: 6px;
+  padding: 8px 10px; margin-top: 8px; font-size: 13px;
+}
+.lx-current-highlight {
+  border-bottom: 4px solid #ff4444;
+  font-weight: bold;
+  animation: lx-pulse 1s ease-in-out;
+}
+@keyframes lx-pulse {
+  0% { text-decoration-color: #ff4444; }
+  50% { text-decoration-color: #ff0000; }
+  100% { text-decoration-color: #ff4444; }
+}
+.lx-legend {
+  font-size: 12px; margin-bottom: 8px;
+  padding-bottom: 8px; border-bottom: 1px solid #e0e0e0;
+}
+.lx-label {
+  display: inline-block;
+  padding: 2px 4px;
+  border-radius: 3px;
+  margin-right: 4px;
+  color: #000;
+}
+.lx-attr-key {
+  font-weight: 600;
+  color: #1565c0;
+  letter-spacing: 0.3px;
+}
+.lx-attr-value {
+  font-weight: 400;
+  opacity: 0.85;
+  letter-spacing: 0.2px;
+}
+
+/* Add optimizations with larger fonts and better readability for GIFs */
+.lx-gif-optimized .lx-text-window { font-size: 16px; line-height: 1.8; }
+.lx-gif-optimized .lx-attributes-panel { font-size: 15px; }
+.lx-gif-optimized .lx-current-highlight { text-decoration-thickness: 4px; }
+</style>
+    <div class="lx-animated-wrapper lx-gif-optimized">
+      <div class="lx-attributes-panel">
+        <div class="lx-legend">Highlights Legend: <span class="lx-label" style="background-color:#D2E3FC;">feature</span> <span class="lx-label" style="background-color:#C8E6C9;">requirement</span></div>
+        <div id="attributesContainer"></div>
+      </div>
+      <div class="lx-text-window" id="textWindow">
+        오늘날처럼 온갖 데이터가 넘쳐나는 세상에서는 상세한 임상 기록, 장황한 법률 문서, 고객 피드백 스레드, 계속 새롭게 쏟아지는 뉴스 보도 등 비정형 텍스트에 귀중한 인사이트가 묻혀 있는 경우가 많습니다. 이러한 정보를 수동으로 선별하거나 데이터를 처리하는 맞춤형 코드를 작성하는 데는 시간이 오래 걸리고 오류도 발생하기 쉽습니다. 또한 무턱대고 최신 LLM(대형 언어 모델)을 사용하다 보면 오류가 발생할 수 있습니다. 필요한 정확한 정보를 프로그래밍 방식으로 추출하는 동시에 그 결과물이 구조화되어 있으며 소스에 안정적으로 연결될 수 있다면 어떨까요?
+오늘, 개발자가 바로 그런 일을 할 수 있도록 설계된 새로운 오픈소스 Python 라이브러리인 LangExtract를 선보이게 되어 기쁩니다. LangExtract는 사용자 설정 지시문에 따라 대량의 비정형 텍스트를 구조화된 정보로 처리하기 위해서 Gemini 모델 같은 다양한 LLM에 대한 경량 인터페이스를 제공하여 유연성과 추적성을 모두 보장합니다.
+의료 기록이나 재무 정보 요약 등 텍스트가 많은 분야를 다루는 어떤 경우든 LangExtract는 작업 대상물 내에서 유용한 데이터를 추출하는 유연하고 강력한 방법을 제공합니다.
+LangExtract는 다음과 같이 정보 추출에 유용한 고유한 기능들을 조합해 제공합니다.
+셰익스피어 작품 속 한 줄의 글에서 인물의 세부 정보를 추출하는 방법은 다음과 같습니다.
+먼저, 라이브러리를 설치합니다.
+가상 환경과 API 키 구성을 포함한 보다 자세한 설정 지침은 프로젝트 리드미를 참조하세요.
+pip install langextract
+다음으로, 추출 작업을 정의합니다. 모델을 안내하기 위해 명확한 프롬프트와 고품질의 &#x27;퓨 샷&#x27; 예를 제공하세요.
+import textwrap
+import langextract as lx
+# 1. 간결한 프롬프트 정의
+prompt = textwrap.dedent(&quot;&quot;&quot;\
+<span class="lx-highlight lx-current-highlight" data-idx="0" style="background-color:#D2E3FC;">Extract characters, emotions, and relationships in order of appearance</span>.
+<span class="lx-highlight" data-idx="1" style="background-color:#C8E6C9;">Use exact text for extractions. Do not paraphrase or overlap entities.</span>
+<span class="lx-highlight" data-idx="2" style="background-color:#C8E6C9;">Provide meaningful attributes for each entity to add context</span>.&quot;&quot;&quot;)
+# 2. 모델을 안내하기 위한 고품질의 예 제공
+examples = [
+lx.data.ExampleData(
+text=(
+&quot;ROMEO. But soft! What light through yonder window breaks? It is&quot;
+&quot; the east, and Juliet is the sun.&quot;
+),
+extractions=[
+lx.data.Extraction(
+extraction_class=&quot;character&quot;,
+extraction_text=&quot;ROMEO&quot;,
+attributes={&quot;emotional_state&quot;: &quot;wonder&quot;},
+),
+lx.data.Extraction(
+extraction_class=&quot;emotion&quot;,
+extraction_text=&quot;But soft!&quot;,
+attributes={&quot;feeling&quot;: &quot;gentle awe&quot;},
+),
+lx.data.Extraction(
+extraction_class=&quot;relationship&quot;,
+extraction_text=&quot;Juliet is the sun&quot;,
+attributes={&quot;type&quot;: &quot;metaphor&quot;},
+),
+],
+)
+]
+# 3. 입력 텍스트에서 추출 실행
+input_text = (
+&quot;Lady Juliet gazed longingly at the stars, her heart aching for Romeo&quot;
+)
+result = lx.extract(
+text_or_documents=input_text,
+prompt_description=prompt,
+examples=examples,
+model_id=&quot;gemini-2.5-pro&quot;,
+)
+결과 객체에는 추출된 항목이 포함되어 있고, 이를 JSONL 파일에 저장할 수 있습니다. 이후 주석을 볼 수 있는 대화형 HTML 파일을 생성할 수 있습니다. 이러한 시각화는 데모 또는 추출 품질 평가에 매우 유용하며 귀중한 시간을 절약하는 데 도움이 됩니다. Google Colab과 같은 환경에서 원활하게 활용할 수 있고 또는 브라우저에서 볼 수 있는 독립 실행형 HTML 파일로 저장할 수 있습니다.
+# <span class="lx-highlight" data-idx="3" style="background-color:#D2E3FC;">JSONL 파일에 결과 저장</span>
+lx.io.save_annotated_documents([result], output_name=&quot;extraction_results.jsonl&quot;)
+# 파일에서 <span class="lx-highlight" data-idx="4" style="background-color:#D2E3FC;">대화형</span> 시각화 생성
+html_content = lx.visualize(&quot;extraction_results.jsonl&quot;)
+with open(&quot;visualization.html&quot;, &quot;w&quot;) as f:
+f.write(html_content)
+위와 동일한 원칙이 의학이나 금융, 공학, 법률 등의 전문 영역에도 적용됩니다. LangExtract의 기본 발상은 <span class="lx-highlight" data-idx="5" style="background-color:#D2E3FC;">의료 정보 추출에</span> 처음 적용되었으며 임상 텍스트 처리에 효과적으로 사용될 수 있습니다. 예를 들어 <span class="lx-highlight" data-idx="6" style="background-color:#D2E3FC;">약물, 복용량, 기타 약물</span> 속성을 식별한 다음 이들 간의 관계를 매핑할 수 있습니다. 바로 이 기능이 이 라이브러리 개발로 이어진 연구의 핵심이었습니다. 자세한 내용은 <span class="lx-highlight" data-idx="7" style="background-color:#D2E3FC;">의료 정보 추출</span> 가속화에 대한 논문에서 살펴보실 수 있습니다.
+아래 영상은 LangExtract가 임상 텍스트를 처리하여 약물 관련 항목을 추출하고 소스 약물로 분류하는 과정을 보여줍니다.
+전문 분야에서 LangExtract의 역량을 보여드리고자, Hugging Face에서 RadExtract라는 이름의 구조화된 <span class="lx-highlight" data-idx="8" style="background-color:#D2E3FC;">방사선학</span> 보고를 위한 대화형 데모를 개발했습니다. 이 데모는 LangExtract가 어떻게 자유 서술식 방사선학 보고서를 처리하고, 주요 소견을 구조화된 형식으로 자동 변환하며, 중요한 소견을 강조 표시하는지 보여줍니다. 이러한 접근 방식은 보고서를 구조화함으로써 명확성을 향상시키고, 완전성을 보장하며, 연구 및 임상 치료를 위한 데이터 상호 운용성을 개선하는 방사선학에서 중요합니다.
+부인: 위의 약물 추출 예시와 구조화된 보고 데모는 <span class="lx-highlight" data-idx="9" style="background-color:#C8E6C9;">LangExtract의 기본</span> 기능을 설명하기 위한 예시일 뿐입니다. 이 데모는 완제품 또는 승인된 제품을 의미하지 않고, 질병이나 질환을 진단하거나 치료를 제안하기 위한 것도 아니며, 의학적 조언에 이를 사용해서도 안 됩니다.
+개발자가 LangExtract를 사용하여 텍스트에서 인사이트를 얻을 수 있는 혁신적인 방법을 제공하게 되어 무척 기쁩니다. 지금 바로 설명서를 살펴보고 GitHub 리포지토리에 있는 예시도 둘러보면서 비정형 데이터 변환을 시작해 보세요.
+      </div>
+      <div class="lx-controls">
+        <div class="lx-button-row">
+          <button class="lx-control-btn" onclick="playPause()">▶️ Play</button>
+          <button class="lx-control-btn" onclick="prevExtraction()">⏮ Previous</button>
+          <button class="lx-control-btn" onclick="nextExtraction()">⏭ Next</button>
+        </div>
+        <div class="lx-progress-container">
+          <input type="range" id="progressSlider" class="lx-progress-slider"
+                 min="0" max="9" value="0"
+                 onchange="jumpToExtraction(this.value)">
+        </div>
+        <div class="lx-status-text">
+          Entity <span id="entityInfo">1/10</span> |
+          Pos <span id="posInfo">[955-1025]</span>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function() {
+        const extractions = [{"index": 0, "class": "feature", "text": "Extract characters, emotions, and relationships in order of appearance", "color": "#D2E3FC", "startPos": 955, "endPos": 1025, "beforeText": "\uc74c\uc73c\ub85c, \ucd94\ucd9c \uc791\uc5c5\uc744 \uc815\uc758\ud569\ub2c8\ub2e4. \ubaa8\ub378\uc744 \uc548\ub0b4\ud558\uae30 \uc704\ud574 \uba85\ud655\ud55c \ud504\ub86c\ud504\ud2b8\uc640 \uace0\ud488\uc9c8\uc758 &#x27;\ud4e8 \uc0f7&#x27; \uc608\ub97c \uc81c\uacf5\ud558\uc138\uc694.\nimport textwrap\nimport langextract as lx\n# 1. \uac04\uacb0\ud55c \ud504\ub86c\ud504\ud2b8 \uc815\uc758\nprompt = textwrap.dedent(&quot;&quot;&quot;\\\n", "extractionText": "Extract characters, emotions, and relationships in order of appearance", "afterText": ".\nUse exact text for extractions. Do not paraphrase or overlap entities.\nProvide meaningful attributes for each entity to add context.&quot;&quot;&quot;)\n# 2. \ubaa8\ub378\uc744 \uc548\ub0b4", "attributesHtml": "<div><strong>class:</strong> feature</div><div><strong>attributes:</strong> {<span class=\"lx-attr-key\">type</span>: <span class=\"lx-attr-value\">Entity Extraction</span>}</div>"}, {"index": 1, "class": "requirement", "text": "Use exact text for extractions. Do not paraphrase or overlap entities.", "color": "#C8E6C9", "startPos": 1027, "endPos": 1097, "beforeText": "twrap\nimport langextract as lx\n# 1. \uac04\uacb0\ud55c \ud504\ub86c\ud504\ud2b8 \uc815\uc758\nprompt = textwrap.dedent(&quot;&quot;&quot;\\\nExtract characters, emotions, and relationships in order of appearance.\n", "extractionText": "Use exact text for extractions. Do not paraphrase or overlap entities.", "afterText": "\nProvide meaningful attributes for each entity to add context.&quot;&quot;&quot;)\n# 2. \ubaa8\ub378\uc744 \uc548\ub0b4\ud558\uae30 \uc704\ud55c \uace0\ud488\uc9c8\uc758 \uc608 \uc81c\uacf5\nexamples = [\nlx.data.ExampleData(\ntext=(\n&quot;ROMEO. But sof", "attributesHtml": "<div><strong>class:</strong> requirement</div><div><strong>attributes:</strong> {<span class=\"lx-attr-key\">scope</span>: <span class=\"lx-attr-value\">Extraction Rules</span>}</div>"}, {"index": 2, "class": "requirement", "text": "Provide meaningful attributes for each entity to add context", "color": "#C8E6C9", "startPos": 1098, "endPos": 1158, "beforeText": "t(&quot;&quot;&quot;\\\nExtract characters, emotions, and relationships in order of appearance.\nUse exact text for extractions. Do not paraphrase or overlap entities.\n", "extractionText": "Provide meaningful attributes for each entity to add context", "afterText": ".&quot;&quot;&quot;)\n# 2. \ubaa8\ub378\uc744 \uc548\ub0b4\ud558\uae30 \uc704\ud55c \uace0\ud488\uc9c8\uc758 \uc608 \uc81c\uacf5\nexamples = [\nlx.data.ExampleData(\ntext=(\n&quot;ROMEO. But soft! What light through yonder window breaks? It is&quot;\n&quot; the east", "attributesHtml": "<div><strong>class:</strong> requirement</div><div><strong>attributes:</strong> {<span class=\"lx-attr-key\">scope</span>: <span class=\"lx-attr-value\">Entity Attributes</span>}</div>"}, {"index": 3, "class": "feature", "text": "JSONL \ud30c\uc77c\uc5d0 \uacb0\uacfc \uc800\uc7a5", "color": "#D2E3FC", "startPos": 2185, "endPos": 2200, "beforeText": "\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4. \uc774\ub7ec\ud55c \uc2dc\uac01\ud654\ub294 \ub370\ubaa8 \ub610\ub294 \ucd94\ucd9c \ud488\uc9c8 \ud3c9\uac00\uc5d0 \ub9e4\uc6b0 \uc720\uc6a9\ud558\uba70 \uadc0\uc911\ud55c \uc2dc\uac04\uc744 \uc808\uc57d\ud558\ub294 \ub370 \ub3c4\uc6c0\uc774 \ub429\ub2c8\ub2e4. Google Colab\uacfc \uac19\uc740 \ud658\uacbd\uc5d0\uc11c \uc6d0\ud65c\ud558\uac8c \ud65c\uc6a9\ud560 \uc218 \uc788\uace0 \ub610\ub294 \ube0c\ub77c\uc6b0\uc800\uc5d0\uc11c \ubcfc \uc218 \uc788\ub294 \ub3c5\ub9bd \uc2e4\ud589\ud615 HTML \ud30c\uc77c\ub85c \uc800\uc7a5\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4.\n# ", "extractionText": "JSONL \ud30c\uc77c\uc5d0 \uacb0\uacfc \uc800\uc7a5", "afterText": "\nlx.io.save_annotated_documents([result], output_name=&quot;extraction_results.jsonl&quot;)\n# \ud30c\uc77c\uc5d0\uc11c \ub300\ud654\ud615 \uc2dc\uac01\ud654 \uc0dd\uc131\nhtml_content = lx.visualize(&quot;extraction_results.js", "attributesHtml": "<div><strong>class:</strong> feature</div><div><strong>attributes:</strong> {<span class=\"lx-attr-key\">type</span>: <span class=\"lx-attr-value\">File saving</span>}</div>"}, {"index": 4, "class": "feature", "text": "\ub300\ud654\ud615 HTML \ud30c\uc77c \uc0dd\uc131", "color": "#D2E3FC", "startPos": 2289, "endPos": 2292, "beforeText": "\ub294 \ube0c\ub77c\uc6b0\uc800\uc5d0\uc11c \ubcfc \uc218 \uc788\ub294 \ub3c5\ub9bd \uc2e4\ud589\ud615 HTML \ud30c\uc77c\ub85c \uc800\uc7a5\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4.\n# JSONL \ud30c\uc77c\uc5d0 \uacb0\uacfc \uc800\uc7a5\nlx.io.save_annotated_documents([result], output_name=&quot;extraction_results.jsonl&quot;)\n# \ud30c\uc77c\uc5d0\uc11c ", "extractionText": "\ub300\ud654\ud615", "afterText": " \uc2dc\uac01\ud654 \uc0dd\uc131\nhtml_content = lx.visualize(&quot;extraction_results.jsonl&quot;)\nwith open(&quot;visualization.html&quot;, &quot;w&quot;) as f:\nf.write(html_content)\n\uc704\uc640 \ub3d9\uc77c\ud55c \uc6d0\uce59\uc774 \uc758\ud559\uc774\ub098 \uae08\uc735, \uacf5", "attributesHtml": "<div><strong>class:</strong> feature</div><div><strong>attributes:</strong> {<span class=\"lx-attr-key\">type</span>: <span class=\"lx-attr-value\">Visualization</span>}</div>"}, {"index": 5, "class": "feature", "text": "\uc758\ub8cc \uc815\ubcf4 \ucd94\ucd9c\uc5d0 \uc801\uc6a9", "color": "#D2E3FC", "startPos": 2486, "endPos": 2495, "beforeText": "ion_results.jsonl&quot;)\nwith open(&quot;visualization.html&quot;, &quot;w&quot;) as f:\nf.write(html_content)\n\uc704\uc640 \ub3d9\uc77c\ud55c \uc6d0\uce59\uc774 \uc758\ud559\uc774\ub098 \uae08\uc735, \uacf5\ud559, \ubc95\ub960 \ub4f1\uc758 \uc804\ubb38 \uc601\uc5ed\uc5d0\ub3c4 \uc801\uc6a9\ub429\ub2c8\ub2e4. LangExtract\uc758 \uae30\ubcf8 \ubc1c\uc0c1\uc740 ", "extractionText": "\uc758\ub8cc \uc815\ubcf4 \ucd94\ucd9c\uc5d0", "afterText": " \ucc98\uc74c \uc801\uc6a9\ub418\uc5c8\uc73c\uba70 \uc784\uc0c1 \ud14d\uc2a4\ud2b8 \ucc98\ub9ac\uc5d0 \ud6a8\uacfc\uc801\uc73c\ub85c \uc0ac\uc6a9\ub420 \uc218 \uc788\uc2b5\ub2c8\ub2e4. \uc608\ub97c \ub4e4\uc5b4 \uc57d\ubb3c, \ubcf5\uc6a9\ub7c9, \uae30\ud0c0 \uc57d\ubb3c \uc18d\uc131\uc744 \uc2dd\ubcc4\ud55c \ub2e4\uc74c \uc774\ub4e4 \uac04\uc758 \uad00\uacc4\ub97c \ub9e4\ud551\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4. \ubc14\ub85c \uc774 \uae30\ub2a5\uc774 \uc774 \ub77c\uc774\ube0c\ub7ec\ub9ac \uac1c\ubc1c\ub85c \uc774\uc5b4\uc9c4 \uc5f0\uad6c\uc758 \ud575\uc2ec\uc774\uc5c8\uc2b5\ub2c8\ub2e4. \uc790\uc138\ud55c \ub0b4\uc6a9\uc740 \uc758\ub8cc \uc815\ubcf4 \ucd94\ucd9c \uac00", "attributesHtml": "<div><strong>class:</strong> feature</div><div><strong>attributes:</strong> {<span class=\"lx-attr-key\">type</span>: <span class=\"lx-attr-value\">Application</span>}</div>"}, {"index": 6, "class": "feature", "text": "\uc57d\ubb3c, \ubcf5\uc6a9\ub7c9, \uae30\ud0c0 \uc57d\ubb3c \uc18d\uc131 \uc2dd\ubcc4 \ubc0f \uad00\uacc4 \ub9e4\ud551", "color": "#D2E3FC", "startPos": 2541, "endPos": 2555, "beforeText": ") as f:\nf.write(html_content)\n\uc704\uc640 \ub3d9\uc77c\ud55c \uc6d0\uce59\uc774 \uc758\ud559\uc774\ub098 \uae08\uc735, \uacf5\ud559, \ubc95\ub960 \ub4f1\uc758 \uc804\ubb38 \uc601\uc5ed\uc5d0\ub3c4 \uc801\uc6a9\ub429\ub2c8\ub2e4. LangExtract\uc758 \uae30\ubcf8 \ubc1c\uc0c1\uc740 \uc758\ub8cc \uc815\ubcf4 \ucd94\ucd9c\uc5d0 \ucc98\uc74c \uc801\uc6a9\ub418\uc5c8\uc73c\uba70 \uc784\uc0c1 \ud14d\uc2a4\ud2b8 \ucc98\ub9ac\uc5d0 \ud6a8\uacfc\uc801\uc73c\ub85c \uc0ac\uc6a9\ub420 \uc218 \uc788\uc2b5\ub2c8\ub2e4. \uc608\ub97c \ub4e4\uc5b4 ", "extractionText": "\uc57d\ubb3c, \ubcf5\uc6a9\ub7c9, \uae30\ud0c0 \uc57d\ubb3c", "afterText": " \uc18d\uc131\uc744 \uc2dd\ubcc4\ud55c \ub2e4\uc74c \uc774\ub4e4 \uac04\uc758 \uad00\uacc4\ub97c \ub9e4\ud551\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4. \ubc14\ub85c \uc774 \uae30\ub2a5\uc774 \uc774 \ub77c\uc774\ube0c\ub7ec\ub9ac \uac1c\ubc1c\ub85c \uc774\uc5b4\uc9c4 \uc5f0\uad6c\uc758 \ud575\uc2ec\uc774\uc5c8\uc2b5\ub2c8\ub2e4. \uc790\uc138\ud55c \ub0b4\uc6a9\uc740 \uc758\ub8cc \uc815\ubcf4 \ucd94\ucd9c \uac00\uc18d\ud654\uc5d0 \ub300\ud55c \ub17c\ubb38\uc5d0\uc11c \uc0b4\ud3b4\ubcf4\uc2e4 \uc218 \uc788\uc2b5\ub2c8\ub2e4.\n\uc544\ub798 \uc601\uc0c1\uc740 LangExtract\uac00 \uc784\uc0c1 \ud14d\uc2a4\ud2b8\ub97c \ucc98\ub9ac\ud558\uc5ec \uc57d\ubb3c", "attributesHtml": "<div><strong>class:</strong> feature</div><div><strong>attributes:</strong> {<span class=\"lx-attr-key\">type</span>: <span class=\"lx-attr-value\">Relationship extraction</span>}</div>"}, {"index": 7, "class": "feature", "text": "\uc758\ub8cc \uc815\ubcf4 \ucd94\ucd9c \uac00\uc18d\ud654 \uc5f0\uad6c \ub17c\ubb38", "color": "#D2E3FC", "startPos": 2635, "endPos": 2643, "beforeText": " \uc758\ub8cc \uc815\ubcf4 \ucd94\ucd9c\uc5d0 \ucc98\uc74c \uc801\uc6a9\ub418\uc5c8\uc73c\uba70 \uc784\uc0c1 \ud14d\uc2a4\ud2b8 \ucc98\ub9ac\uc5d0 \ud6a8\uacfc\uc801\uc73c\ub85c \uc0ac\uc6a9\ub420 \uc218 \uc788\uc2b5\ub2c8\ub2e4. \uc608\ub97c \ub4e4\uc5b4 \uc57d\ubb3c, \ubcf5\uc6a9\ub7c9, \uae30\ud0c0 \uc57d\ubb3c \uc18d\uc131\uc744 \uc2dd\ubcc4\ud55c \ub2e4\uc74c \uc774\ub4e4 \uac04\uc758 \uad00\uacc4\ub97c \ub9e4\ud551\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4. \ubc14\ub85c \uc774 \uae30\ub2a5\uc774 \uc774 \ub77c\uc774\ube0c\ub7ec\ub9ac \uac1c\ubc1c\ub85c \uc774\uc5b4\uc9c4 \uc5f0\uad6c\uc758 \ud575\uc2ec\uc774\uc5c8\uc2b5\ub2c8\ub2e4. \uc790\uc138\ud55c \ub0b4\uc6a9\uc740 ", "extractionText": "\uc758\ub8cc \uc815\ubcf4 \ucd94\ucd9c", "afterText": " \uac00\uc18d\ud654\uc5d0 \ub300\ud55c \ub17c\ubb38\uc5d0\uc11c \uc0b4\ud3b4\ubcf4\uc2e4 \uc218 \uc788\uc2b5\ub2c8\ub2e4.\n\uc544\ub798 \uc601\uc0c1\uc740 LangExtract\uac00 \uc784\uc0c1 \ud14d\uc2a4\ud2b8\ub97c \ucc98\ub9ac\ud558\uc5ec \uc57d\ubb3c \uad00\ub828 \ud56d\ubaa9\uc744 \ucd94\ucd9c\ud558\uace0 \uc18c\uc2a4 \uc57d\ubb3c\ub85c \ubd84\ub958\ud558\ub294 \uacfc\uc815\uc744 \ubcf4\uc5ec\uc90d\ub2c8\ub2e4.\n\uc804\ubb38 \ubd84\uc57c\uc5d0\uc11c LangExtract\uc758 \uc5ed\ub7c9\uc744 \ubcf4\uc5ec\ub4dc\ub9ac\uace0\uc790, Hugging Face\uc5d0\uc11c RadE", "attributesHtml": "<div><strong>class:</strong> feature</div><div><strong>attributes:</strong> {<span class=\"lx-attr-key\">type</span>: <span class=\"lx-attr-value\">Research paper</span>}</div>"}, {"index": 8, "class": "feature", "text": "\ubc29\uc0ac\uc120\ud559 \ubcf4\uace0\uc11c \ucc98\ub9ac \ubc0f \uc18c\uacac \uad6c\uc870\ud654", "color": "#D2E3FC", "startPos": 2811, "endPos": 2815, "beforeText": " \uc218 \uc788\uc2b5\ub2c8\ub2e4.\n\uc544\ub798 \uc601\uc0c1\uc740 LangExtract\uac00 \uc784\uc0c1 \ud14d\uc2a4\ud2b8\ub97c \ucc98\ub9ac\ud558\uc5ec \uc57d\ubb3c \uad00\ub828 \ud56d\ubaa9\uc744 \ucd94\ucd9c\ud558\uace0 \uc18c\uc2a4 \uc57d\ubb3c\ub85c \ubd84\ub958\ud558\ub294 \uacfc\uc815\uc744 \ubcf4\uc5ec\uc90d\ub2c8\ub2e4.\n\uc804\ubb38 \ubd84\uc57c\uc5d0\uc11c LangExtract\uc758 \uc5ed\ub7c9\uc744 \ubcf4\uc5ec\ub4dc\ub9ac\uace0\uc790, Hugging Face\uc5d0\uc11c RadExtract\ub77c\ub294 \uc774\ub984\uc758 \uad6c\uc870\ud654\ub41c ", "extractionText": "\ubc29\uc0ac\uc120\ud559", "afterText": " \ubcf4\uace0\ub97c \uc704\ud55c \ub300\ud654\ud615 \ub370\ubaa8\ub97c \uac1c\ubc1c\ud588\uc2b5\ub2c8\ub2e4. \uc774 \ub370\ubaa8\ub294 LangExtract\uac00 \uc5b4\ub5bb\uac8c \uc790\uc720 \uc11c\uc220\uc2dd \ubc29\uc0ac\uc120\ud559 \ubcf4\uace0\uc11c\ub97c \ucc98\ub9ac\ud558\uace0, \uc8fc\uc694 \uc18c\uacac\uc744 \uad6c\uc870\ud654\ub41c \ud615\uc2dd\uc73c\ub85c \uc790\ub3d9 \ubcc0\ud658\ud558\uba70, \uc911\uc694\ud55c \uc18c\uacac\uc744 \uac15\uc870 \ud45c\uc2dc\ud558\ub294\uc9c0 \ubcf4\uc5ec\uc90d\ub2c8\ub2e4. \uc774\ub7ec\ud55c \uc811\uadfc \ubc29\uc2dd\uc740 \ubcf4\uace0\uc11c\ub97c \uad6c\uc870\ud654\ud568\uc73c\ub85c\uc368 \uba85\ud655\uc131\uc744 \ud5a5", "attributesHtml": "<div><strong>class:</strong> feature</div><div><strong>attributes:</strong> {<span class=\"lx-attr-key\">type</span>: <span class=\"lx-attr-value\">RadExtract demo</span>}</div>"}, {"index": 9, "class": "requirement", "text": "LangExtract\uc758 \uae30\ubcf8 \uae30\ub2a5 \uc124\uba85 \uc608\uc2dc", "color": "#C8E6C9", "startPos": 3057, "endPos": 3072, "beforeText": "\ud558\uba70, \uc911\uc694\ud55c \uc18c\uacac\uc744 \uac15\uc870 \ud45c\uc2dc\ud558\ub294\uc9c0 \ubcf4\uc5ec\uc90d\ub2c8\ub2e4. \uc774\ub7ec\ud55c \uc811\uadfc \ubc29\uc2dd\uc740 \ubcf4\uace0\uc11c\ub97c \uad6c\uc870\ud654\ud568\uc73c\ub85c\uc368 \uba85\ud655\uc131\uc744 \ud5a5\uc0c1\uc2dc\ud0a4\uace0, \uc644\uc804\uc131\uc744 \ubcf4\uc7a5\ud558\uba70, \uc5f0\uad6c \ubc0f \uc784\uc0c1 \uce58\ub8cc\ub97c \uc704\ud55c \ub370\uc774\ud130 \uc0c1\ud638 \uc6b4\uc6a9\uc131\uc744 \uac1c\uc120\ud558\ub294 \ubc29\uc0ac\uc120\ud559\uc5d0\uc11c \uc911\uc694\ud569\ub2c8\ub2e4.\n\ubd80\uc778: \uc704\uc758 \uc57d\ubb3c \ucd94\ucd9c \uc608\uc2dc\uc640 \uad6c\uc870\ud654\ub41c \ubcf4\uace0 \ub370\ubaa8\ub294 ", "extractionText": "LangExtract\uc758 \uae30\ubcf8", "afterText": " \uae30\ub2a5\uc744 \uc124\uba85\ud558\uae30 \uc704\ud55c \uc608\uc2dc\uc77c \ubfd0\uc785\ub2c8\ub2e4. \uc774 \ub370\ubaa8\ub294 \uc644\uc81c\ud488 \ub610\ub294 \uc2b9\uc778\ub41c \uc81c\ud488\uc744 \uc758\ubbf8\ud558\uc9c0 \uc54a\uace0, \uc9c8\ubcd1\uc774\ub098 \uc9c8\ud658\uc744 \uc9c4\ub2e8\ud558\uac70\ub098 \uce58\ub8cc\ub97c \uc81c\uc548\ud558\uae30 \uc704\ud55c \uac83\ub3c4 \uc544\ub2c8\uba70, \uc758\ud559\uc801 \uc870\uc5b8\uc5d0 \uc774\ub97c \uc0ac\uc6a9\ud574\uc11c\ub3c4 \uc548 \ub429\ub2c8\ub2e4.\n\uac1c\ubc1c\uc790\uac00 LangExtract\ub97c \uc0ac\uc6a9\ud558\uc5ec \ud14d\uc2a4\ud2b8\uc5d0\uc11c \uc778\uc0ac\uc774\ud2b8\ub97c \uc5bb\uc744 ", "attributesHtml": "<div><strong>class:</strong> requirement</div><div><strong>attributes:</strong> {<span class=\"lx-attr-key\">scope</span>: <span class=\"lx-attr-value\">\uae30\ubcf8 \uae30\ub2a5</span>}</div>"}];
+        let currentIndex = 0;
+        let isPlaying = false;
+        let animationInterval = null;
+        let animationSpeed = 1.0;
+
+        function updateDisplay() {
+          const extraction = extractions[currentIndex];
+          if (!extraction) return;
+
+          document.getElementById('attributesContainer').innerHTML = extraction.attributesHtml;
+          document.getElementById('entityInfo').textContent = (currentIndex + 1) + '/' + extractions.length;
+          document.getElementById('posInfo').textContent = '[' + extraction.startPos + '-' + extraction.endPos + ']';
+          document.getElementById('progressSlider').value = currentIndex;
+
+          const playBtn = document.querySelector('.lx-control-btn');
+          if (playBtn) playBtn.textContent = isPlaying ? '⏸ Pause' : '▶️ Play';
+
+          const prevHighlight = document.querySelector('.lx-text-window .lx-current-highlight');
+          if (prevHighlight) prevHighlight.classList.remove('lx-current-highlight');
+          const currentSpan = document.querySelector('.lx-text-window span[data-idx="' + currentIndex + '"]');
+          if (currentSpan) {
+            currentSpan.classList.add('lx-current-highlight');
+            currentSpan.scrollIntoView({block: 'center', behavior: 'smooth'});
+          }
+        }
+
+        function nextExtraction() {
+          currentIndex = (currentIndex + 1) % extractions.length;
+          updateDisplay();
+        }
+
+        function prevExtraction() {
+          currentIndex = (currentIndex - 1 + extractions.length) % extractions.length;
+          updateDisplay();
+        }
+
+        function jumpToExtraction(index) {
+          currentIndex = parseInt(index);
+          updateDisplay();
+        }
+
+        function playPause() {
+          if (isPlaying) {
+            clearInterval(animationInterval);
+            isPlaying = false;
+          } else {
+            animationInterval = setInterval(nextExtraction, animationSpeed * 1000);
+            isPlaying = true;
+          }
+          updateDisplay();
+        }
+
+        window.playPause = playPause;
+        window.nextExtraction = nextExtraction;
+        window.prevExtraction = prevExtraction;
+        window.jumpToExtraction = jumpToExtraction;
+
+        updateDisplay();
+      })();
+    </script>

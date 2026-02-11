@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>LangExtract 기술 분석</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, 'Pretendard', 'Segoe UI', sans-serif; background: #f8f9fa; }
+.header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: white; padding: 20px 32px;
+}
+.header h1 { font-size: 1.4em; margin-bottom: 8px; }
+.header .stats { font-size: 0.85em; opacity: 0.8; }
+.legend {
+    padding: 12px 32px; background: white;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+}
+.legend-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 12px; border-radius: 16px; font-size: 0.8em;
+    cursor: pointer; transition: all 0.2s;
+    background: #f5f5f5;
+}
+.legend-item:hover { background: #e0e0e0; }
+.legend-item.hidden { opacity: 0.3; text-decoration: line-through; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+.main {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 0; height: calc(100vh - 130px);
+}
+.panel {
+    overflow-y: auto; padding: 24px;
+}
+.panel-header {
+    font-size: 0.9em; font-weight: 700; color: #666;
+    text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 16px; padding-bottom: 8px;
+    border-bottom: 2px solid #e0e0e0;
+}
+.panel-left { background: white; border-right: 1px solid #e0e0e0; }
+.panel-right { background: #fafafa; }
+
+/* Highlighted text */
+.source-text {
+    line-height: 1.8; font-size: 0.95em; color: #333;
+    white-space: pre-wrap; word-wrap: break-word;
+}
+.highlight {
+    padding: 2px 4px; border-radius: 4px;
+    border-bottom: 2px solid; cursor: pointer;
+    transition: all 0.2s; position: relative;
+}
+.highlight:hover {
+    filter: brightness(0.9);
+}
+.highlight .tooltip {
+    display: none; position: absolute; bottom: 100%; left: 0;
+    background: #333; color: white; padding: 6px 10px;
+    border-radius: 6px; font-size: 0.75em; white-space: nowrap;
+    z-index: 10;
+}
+.highlight:hover .tooltip { display: block; }
+
+/* Entity cards */
+.entity-card {
+    background: white; border-radius: 8px; padding: 12px 16px;
+    margin-bottom: 8px; border-left: 4px solid;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    transition: all 0.2s;
+}
+.entity-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+.entity-card .class-label {
+    font-size: 0.7em; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 4px;
+}
+.entity-card .text {
+    font-size: 0.9em; margin-bottom: 6px; color: #333;
+}
+.entity-card .attrs {
+    font-size: 0.75em; color: #888;
+}
+.entity-card .attrs span {
+    background: #f0f0f0; padding: 2px 8px; border-radius: 10px;
+    margin-right: 4px;
+}
+
+/* Hidden class */
+.hidden-entity { display: none !important; }
+
+/* Responsive */
+@media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="header">
+    <h1>🔬 LangExtract 기술 분석</h1>
+    <div class="stats">19개 엔티티 · 3개 클래스 · 3,316자 원문</div>
+</div>
+<div class="legend">
+    <span style="font-size:0.8em; color:#999; margin-right:8px;">필터:</span>
+    <span class="legend-item" data-class="feature" onclick="toggleClass('feature')"><span class="legend-dot" style="background:#4caf50"></span>🟢 기능 (11)</span> <span class="legend-item" data-class="limitation" onclick="toggleClass('limitation')"><span class="legend-dot" style="background:#f44336"></span>🔴 제한사항 (3)</span> <span class="legend-item" data-class="requirement" onclick="toggleClass('requirement')"><span class="legend-dot" style="background:#2196f3"></span>🔵 요구사항 (5)</span>
+</div>
+<div class="main">
+    <div class="panel panel-left">
+        <div class="panel-header">📄 Input — 원문 (하이라이트)</div>
+        <div class="source-text">오늘날처럼 온갖 데이터가 넘쳐나는 세상에서는 상세한 임상 기록, 장황한 법률 문서, 고객 피드백 스레드, 계속 새롭게 쏟아지는 뉴스 보도 등 비정형 텍스트에 귀중한 인사이트가 묻혀 있는 경우가 많습니다. 이러한 정보를 수동으로 선별하거나 데이터를 처리하는 맞춤형 코드를 작성하는 데는 시간이 오래 걸리고 오류도 발생하기 쉽습니다. 또한 무턱대고 최신 LLM(대형 언어 모델)을 사용하다 보면 오류가 발생할 수 있습니다. 필요한 정확한 정보를 프로그래밍 방식으로 추출하는 동시에 그 결과물이 구조화되어 있으며 소스에 안정적으로 연결될 수 있다면 어떨까요?
+오늘, 개발자가 바로 그런 일을 할 수 있도록 설계된 새로운 오픈소스 Python 라이브러리인 LangExtract를 선보이게 되어 기쁩니다. LangExtract는 사용자 설정 지시문에 따라 대량의 비정형 텍스트를 구조화된 정보로 처리하기 위해서 Gemini 모델 같은 다양한 LLM에 대한 경량 인터페이스를 제공하여 유연성과 추적성을 모두 보장합니다.
+의료 기록이나 재무 정보 요약 등 텍스트가 많은 분야를 다루는 어떤 경우든 LangExtract는 작업 대상물 내에서 유용한 데이터를 추출하는 유연하고 강력한 방법을 제공합니다.
+LangExtract는 다음과 같이 정보 추출에 유용한 고유한 기능들을 조합해 제공합니다.
+셰익스피어 작품 속 한 줄의 글에서 인물의 세부 정보를 추출하는 방법은 다음과 같습니다.
+먼저, 라이브러리를 설치합니다.
+가상 환경과 API 키 구성을 포함한 보다 자세한 설정 지침은 프로젝트 리드미를 참조하세요.
+pip install langextract
+다음으로, 추출 작업을 정의합니다. 모델을 안내하기 위해 명확한 프롬프트와 고품질의 &#x27;퓨 샷&#x27; 예를 제공하세요.
+import textwrap
+import langextract as lx
+# 1. 간결한 프롬프트 정의
+prompt = textwrap.dedent(&quot;&quot;&quot;\
+<span class="highlight" data-class="feature" style="background:#e8f5e9; border-color:#4caf50">Extract characters, emotions, and relationships in order of appearance<span class="tooltip">🟢 기능 — type: Entity Extraction</span></span>.
+<span class="highlight" data-class="requirement" style="background:#e3f2fd; border-color:#2196f3">Use exact text for extractions. Do not paraphrase or overlap entities.<span class="tooltip">🔵 요구사항 — scope: Textual Extraction</span></span>
+<span class="highlight" data-class="requirement" style="background:#e3f2fd; border-color:#2196f3">Provide meaningful attributes for each entity to add context<span class="tooltip">🔵 요구사항 — scope: Entity Attributes</span></span>.&quot;&quot;&quot;)
+# 2. 모델을 안내하기 위한 고품질의 예 제공
+examples = [
+lx.data.ExampleData(
+text=(
+&quot;ROMEO. But soft! What light through yonder window breaks? It is&quot;
+&quot; the east, and Juliet is the sun.&quot;
+),
+extractions=[
+lx.data.Extraction(
+extraction_class=&quot;character&quot;,
+extraction_text=&quot;ROMEO&quot;,
+attributes={&quot;emotional_state&quot;: &quot;wonder&quot;},
+),
+lx.data.Extraction(
+extraction_class=&quot;emotion&quot;,
+extraction_text=&quot;But soft!&quot;,
+attributes={&quot;feeling&quot;: &quot;gentle awe&quot;},
+),
+lx.data.Extraction(
+extraction_class=&quot;relationship&quot;,
+extraction_text=&quot;Juliet is the sun&quot;,
+attributes={&quot;type&quot;: &quot;metaphor&quot;},
+),
+],
+)
+]
+# 3. 입력 텍스트에서 추출 실행
+input_text = (
+&quot;Lady Juliet gazed longingly at the stars, her heart aching for Romeo&quot;
+)
+result = lx.extract(
+text_or_documents=input_text,
+prompt_description=prompt,
+examples=examples,
+model_id=&quot;gemini-2.5-pro&quot;,
+)
+결과 객체에는 추출된 항목이 포함되어 있고, 이를 JSONL 파일에 저장할 수 있습니다. 이후 주석을 볼 수 있는 대화형 HTML 파일을 생성할 수 있습니다. 이러한 시각화는 데모 또는 추출 품질 평가에 매우 유용하며 귀중한 시간을 절약하는 데 도움이 됩니다. Google Colab과 같은 환경에서 원활하게 활용할 수 있고 또는 브라우저에서 볼 수 있는 독립 실행형 HTML 파일로 저장할 수 있습니다.
+# <span class="highlight" data-class="feature" style="background:#e8f5e9; border-color:#4caf50">JSONL 파일에 결과 저장<span class="tooltip">🟢 기능 — type: File saving</span></span>
+lx.io.save_annotated_documents([result], output_name=&quot;extraction_results.jsonl&quot;)
+# 파일에서 대화형 시각화 생성
+html_content = lx.visualize(&quot;extraction_results.jsonl&quot;)
+with open(&quot;visualization.html&quot;, &quot;w&quot;) as f:
+f.write(html_content)
+위와 동일한 원칙이 의학이나 금융, 공학, 법률 등의 전문 영역에도 적용됩니다. LangExtract의 기본 발상은 의료 정보 추출에 처음 적용되었으며 임상 텍스트 처리에 효과적으로 사용될 수 있습니다. 예를 들어 약물, 복용량, 기타 약물 속성을 식별한 다음 이들 간의 관계를 매핑할 수 있습니다. 바로 이 기능이 이 라이브러리 개발로 이어진 연구의 핵심이었습니다. 자세한 내용은 의료 정보 추출 가속화에 대한 논문에서 살펴보실 수 있습니다.
+아래 영상은 LangExtract가 임상 텍스트를 처리하여 약물 관련 항목을 추출하고 소스 약물로 분류하는 과정을 보여줍니다.
+전문 분야에서 LangExtract의 역량을 보여드리고자, Hugging Face에서 RadExtract라는 이름의 구조화된 방사선학 보고를 위한 대화형 데모를 개발했습니다. 이 데모는 LangExtract가 어떻게 자유 서술식 방사선학 보고서를 처리하고, 주요 소견을 구조화된 형식으로 자동 변환하며, 중요한 소견을 강조 표시하는지 보여줍니다. 이러한 접근 방식은 보고서를 구조화함으로써 명확성을 향상시키고, 완전성을 보장하며, 연구 및 임상 치료를 위한 데이터 상호 운용성을 개선하는 방사선학에서 중요합니다.
+부인: 위의 약물 추출 예시와 구조화된 보고 데모는 <span class="highlight" data-class="requirement" style="background:#e3f2fd; border-color:#2196f3">LangExtract의 기본 기능을 설명하기 위한 예시<span class="tooltip">🔵 요구사항 — scope: Example</span></span>일 뿐입니다. 이 데모는 완제품 또는 승인된 제품을 의미하지 않고, 질병이나 질환을 진단하거나 치료를 제안하기 위한 것도 아니며, 의학적 조언에 이를 사용해서도 안 됩니다.
+개발자가 LangExtract를 사용하여 텍스트에서 인사이트를 얻을 수 있는 혁신적인 방법을 제공하게 되어 무척 기쁩니다. 지금 바로 설명서를 살펴보고 GitHub 리포지토리에 있는 예시도 둘러보면서 비정형 데이터 변환을 시작해 보세요.</div>
+    </div>
+    <div class="panel panel-right">
+        <div class="panel-header">📊 Output — 추출된 엔티티 (19)</div>
+        <div id="entityList"><div class="entity-card" data-class="feature" style="border-color:#4caf50"><div class="class-label" style="color:#4caf50">🟢 기능</div><div class="text">supports local inference using Ollama</div><div class="attrs"><span>type: LLM support</span></div></div>
+<div class="entity-card" data-class="requirement" style="border-color:#2196f3"><div class="class-label" style="color:#2196f3">🔵 요구사항</div><div class="text">Install from ollama.com</div><div class="attrs"><span>dependency: Ollama</span></div></div>
+<div class="entity-card" data-class="limitation" style="border-color:#f44336"><div class="class-label" style="color:#f44336">🔴 제한사항</div><div class="text">OpenAI models require fence_output=True</div><div class="attrs"><span>scope: OpenAI</span></div></div>
+<div class="entity-card" data-class="feature" style="border-color:#4caf50"><div class="class-label" style="color:#4caf50">🟢 기능</div><div class="text">Extract characters, emotions, and relationships in order of appearance</div><div class="attrs"><span>type: Entity Extraction</span></div></div>
+<div class="entity-card" data-class="requirement" style="border-color:#2196f3"><div class="class-label" style="color:#2196f3">🔵 요구사항</div><div class="text">Use exact text for extractions. Do not paraphrase or overlap entities.</div><div class="attrs"><span>scope: Textual Extraction</span></div></div>
+<div class="entity-card" data-class="requirement" style="border-color:#2196f3"><div class="class-label" style="color:#2196f3">🔵 요구사항</div><div class="text">Provide meaningful attributes for each entity to add context</div><div class="attrs"><span>scope: Entity Attributes</span></div></div>
+<div class="entity-card" data-class="feature" style="border-color:#4caf50"><div class="class-label" style="color:#4caf50">🟢 기능</div><div class="text">supports local inference using Ollama</div><div class="attrs"><span>type: LLM support</span></div></div>
+<div class="entity-card" data-class="requirement" style="border-color:#2196f3"><div class="class-label" style="color:#2196f3">🔵 요구사항</div><div class="text">Install from ollama.com</div><div class="attrs"><span>dependency: Ollama</span></div></div>
+<div class="entity-card" data-class="limitation" style="border-color:#f44336"><div class="class-label" style="color:#f44336">🔴 제한사항</div><div class="text">OpenAI models require fence_output=True</div><div class="attrs"><span>scope: OpenAI</span></div></div>
+<div class="entity-card" data-class="feature" style="border-color:#4caf50"><div class="class-label" style="color:#4caf50">🟢 기능</div><div class="text">JSONL 파일에 결과 저장</div><div class="attrs"><span>type: File saving</span></div></div>
+<div class="entity-card" data-class="feature" style="border-color:#4caf50"><div class="class-label" style="color:#4caf50">🟢 기능</div><div class="text">대화형 HTML 파일 생성</div><div class="attrs"><span>type: Visualization</span></div></div>
+<div class="entity-card" data-class="feature" style="border-color:#4caf50"><div class="class-label" style="color:#4caf50">🟢 기능</div><div class="text">Google Colab 및 브라우저에서 사용 가능</div><div class="attrs"><span>type: Environment</span></div></div>
+<div class="entity-card" data-class="feature" style="border-color:#4caf50"><div class="class-label" style="color:#4caf50">🟢 기능</div><div class="text">의료 정보 추출에 적용</div><div class="attrs"><span>type: Application</span></div></div>
+<div class="entity-card" data-class="feature" style="border-color:#4caf50"><div class="class-label" style="color:#4caf50">🟢 기능</div><div class="text">약물, 복용량, 기타 약물 속성 식별 및 관계 매핑</div><div class="attrs"><span>type: Relationship extraction</span></div></div>
+<div class="entity-card" data-class="feature" style="border-color:#4caf50"><div class="class-label" style="color:#4caf50">🟢 기능</div><div class="text">의료 정보 추출 가속화 논문 참조</div><div class="attrs"><span>type: Research paper reference</span></div></div>
+<div class="entity-card" data-class="feature" style="border-color:#4caf50"><div class="class-label" style="color:#4caf50">🟢 기능</div><div class="text">RadExtract 데모 (Hugging Face)</div><div class="attrs"><span>type: Demo</span></div></div>
+<div class="entity-card" data-class="feature" style="border-color:#4caf50"><div class="class-label" style="color:#4caf50">🟢 기능</div><div class="text">구조화된 보고를 통해 명확성, 완전성 및 데이터 상호 운용성 향상</div><div class="attrs"><span>type: Report Structure Improvement</span></div></div>
+<div class="entity-card" data-class="requirement" style="border-color:#2196f3"><div class="class-label" style="color:#2196f3">🔵 요구사항</div><div class="text">LangExtract의 기본 기능을 설명하기 위한 예시</div><div class="attrs"><span>scope: Example</span></div></div>
+<div class="entity-card" data-class="limitation" style="border-color:#f44336"><div class="class-label" style="color:#f44336">🔴 제한사항</div><div class="text">질병이나 질환 진단, 치료 제안, 의학적 조언에 사용하지 않음.</div><div class="attrs"><span>scope: Medical Advice Disclaimer</span></div></div></div>
+    </div>
+</div>
+<script>
+const hiddenClasses = new Set();
+function toggleClass(cls) {
+    const items = document.querySelectorAll('[data-class="'+cls+'"]');
+    const legendItem = document.querySelector('.legend-item[data-class="'+cls+'"]');
+    if (hiddenClasses.has(cls)) {
+        hiddenClasses.delete(cls);
+        items.forEach(el => el.classList.remove('hidden-entity'));
+        legendItem.classList.remove('hidden');
+    } else {
+        hiddenClasses.add(cls);
+        items.forEach(el => el.classList.add('hidden-entity'));
+        legendItem.classList.add('hidden');
+    }
+}
+</script>
+</body>
+</html>
