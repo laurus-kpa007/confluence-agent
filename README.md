@@ -7,6 +7,7 @@
 - **[🔧 SETUP.md](SETUP.md)** - 상세 설정 가이드
 - **[🩺 TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - 문제 해결 가이드
 - **[🔬 LANGEXTRACT_USAGE.md](LANGEXTRACT_USAGE.md)** - LangExtract 사용법 및 역할
+- **[📦 ENTITY_VIEWER.md](ENTITY_VIEWER.md)** - 엔티티 뷰어 (구조화된 정보 시각화)
 - **[📊 ANALYSIS.md](ANALYSIS.md)** - 기술 분석 보고서
 - **[📝 CHANGELOG.md](CHANGELOG.md)** - 변경 이력
 

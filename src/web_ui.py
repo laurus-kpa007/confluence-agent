@@ -43,7 +43,9 @@ class WebUI:
         self.app.router.add_post("/api/process", self._process)
         self.app.router.add_post("/api/publish", self._publish)
         self.app.router.add_post("/api/extract_viz", self._extract_visualize)
+        self.app.router.add_post("/api/extract_entities", self._extract_entities)
         self.app.router.add_get("/viz", self._viz_page)
+        self.app.router.add_get("/entities", self._entities_page)
         self.app.router.add_get("/api/confluence/spaces", self._list_spaces)
         self.app.router.add_get("/api/confluence/pages", self._list_pages)
         self.app.router.add_get("/api/confluence/search", self._search_pages)
@@ -208,6 +210,62 @@ class WebUI:
             text=getattr(self, '_last_viz_html', '<h1>No visualization yet</h1>'),
             content_type='text/html',
         )
+
+    async def _extract_entities(self, request):
+        """Extract structured entities and return JSON data."""
+        try:
+            data = await request.json()
+            sources = data.get("sources", [])
+            profile = data.get("profile", "general")
+
+            # Extract content from sources
+            contents = await self.router.extract_many(sources)
+            combined = "\n\n".join([c.content for c in contents])
+
+            # Run LangExtract
+            from .extractor import StructuredExtractor
+            extractor = StructuredExtractor(
+                model_id="gemma2:2b",
+                model_url="http://localhost:11434",
+            )
+            result = await extractor.extract(combined[:20000], profile=profile)
+
+            # Convert entities to JSON-serializable format
+            entities_data = []
+            for entity in result.entities:
+                entity_dict = {
+                    "type": entity.type,
+                    "content": entity.content,
+                    "fields": entity.fields or {},
+                    "confidence": entity.spans[0].score if entity.spans else 0.0,
+                    "position": {
+                        "start": entity.spans[0].start,
+                        "end": entity.spans[0].end,
+                    } if entity.spans else None,
+                }
+                entities_data.append(entity_dict)
+
+            return web.json_response({
+                "ok": True,
+                "profile": profile,
+                "entities": entities_data,
+                "total_count": len(entities_data),
+                "source_text": combined[:5000],  # First 5000 chars for preview
+            })
+        except Exception as e:
+            import traceback
+            return web.json_response({
+                "ok": False,
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+            }, status=500)
+
+    async def _entities_page(self, request):
+        """Serve the entities viewer page."""
+        entities_html_path = STATIC_DIR / "entities.html"
+        if entities_html_path.exists():
+            return web.FileResponse(entities_html_path)
+        return web.Response(text="<h1>Entities viewer not found</h1>", content_type="text/html")
 
     async def _list_spaces(self, request):
         if not self.publisher:

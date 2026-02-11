@@ -321,6 +321,9 @@
           <button class="btn btn-primary" onclick="processAll()" id="processBtn" style="flex:1;">
             🚀 생성하기
           </button>
+          <button class="btn btn-secondary" onclick="openEntitiesViewer()" title="엔티티 뷰어 (새 탭)">
+            📦
+          </button>
           <button class="btn btn-secondary" onclick="runVisualization()" id="vizBtn" title="LangExtract 시각화">
             🔬
           </button>
@@ -767,6 +770,11 @@
       const w = window.open('', '_blank');
       w.document.write(lastVizHtml);
       w.document.close();
+    }
+
+    // --- Entities Viewer ---
+    function openEntitiesViewer() {
+      window.open('/entities', '_blank');
     }
 
     // --- Confluence Space/Page ---
