@@ -42,6 +42,8 @@ class WebUI:
         self.app.router.add_post("/api/extract", self._extract)
         self.app.router.add_post("/api/process", self._process)
         self.app.router.add_post("/api/publish", self._publish)
+        self.app.router.add_post("/api/extract_viz", self._extract_visualize)
+        self.app.router.add_get("/viz", self._viz_page)
         self.app.router.add_get("/api/confluence/spaces", self._list_spaces)
         self.app.router.add_get("/api/confluence/pages", self._list_pages)
         self.app.router.add_get("/api/confluence/search", self._search_pages)
@@ -151,6 +153,52 @@ class WebUI:
             return web.json_response({"ok": True, **result})
         except Exception as e:
             return web.json_response({"ok": False, "error": str(e)}, status=500)
+
+    async def _extract_visualize(self, request):
+        """Run LangExtract and return interactive HTML visualization."""
+        data = await request.json()
+        sources = data.get("sources", [])
+        profile = data.get("profile", "general")
+
+        try:
+            # Extract text from sources
+            contents = await self.router.extract_many(sources)
+            combined = "\n\n".join(c.text[:10000] for c in contents)
+
+            # Run LangExtract with visualization
+            from .extractor import StructuredExtractor
+            import tempfile
+            extractor = StructuredExtractor(
+                model_id="gemma2:2b",
+                model_url="http://localhost:11434",
+            )
+            with tempfile.TemporaryDirectory() as tmpdir:
+                result, html_str = await extractor.extract_with_visualization(
+                    combined, profile=profile, output_dir=tmpdir,
+                )
+
+            entities_summary = extractor.format_entities_as_context(result)
+
+            return web.json_response({
+                "ok": True,
+                "html": html_str,
+                "entities_count": len(result.entities),
+                "entities_summary": entities_summary,
+            })
+        except Exception as e:
+            import traceback
+            return web.json_response({
+                "ok": False,
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+            }, status=500)
+
+    async def _viz_page(self, request):
+        """Serve the last generated visualization as a standalone page."""
+        return web.Response(
+            text=getattr(self, '_last_viz_html', '<h1>No visualization yet</h1>'),
+            content_type='text/html',
+        )
 
     async def _list_spaces(self, request):
         if not self.publisher:

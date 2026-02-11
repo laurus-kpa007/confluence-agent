@@ -177,6 +177,73 @@ class StructuredExtractor:
 
         return ExtractionResult(entities=entities, raw_text=text)
 
+    async def extract_with_visualization(
+        self,
+        text: str,
+        profile: str = "general",
+        output_dir: str = ".",
+    ) -> tuple:
+        """Run extraction and generate interactive HTML visualization.
+        
+        Returns:
+            (ExtractionResult, html_string)
+        """
+        import langextract as lx
+        from pathlib import Path
+
+        prof = EXTRACTION_PROFILES.get(profile, EXTRACTION_PROFILES["general"])
+
+        examples = []
+        for ex in prof["examples"]:
+            extractions = [
+                lx.data.Extraction(
+                    extraction_class=e["class"],
+                    extraction_text=e["text"],
+                    attributes=e.get("attributes", {}),
+                )
+                for e in ex["extractions"]
+            ]
+            examples.append(lx.data.ExampleData(text=ex["text"], extractions=extractions))
+
+        kwargs = {
+            "text_or_documents": text[:50000],
+            "prompt_description": prof["prompt"],
+            "examples": examples,
+            "model_id": self.model_id,
+            "fence_output": False,
+            "use_schema_constraints": False,
+        }
+        if self.model_url and not self.api_key:
+            kwargs["model_url"] = self.model_url
+        elif self.api_key:
+            kwargs["api_key"] = self.api_key
+
+        result = lx.extract(**kwargs)
+
+        # Save to JSONL for visualization
+        jsonl_path = str(Path(output_dir) / "extraction_results.jsonl")
+        lx.io.save_annotated_documents([result], output_name="extraction_results.jsonl", output_dir=output_dir)
+
+        # Generate HTML visualization
+        html_content = lx.visualize(jsonl_path)
+        html_str = ""
+        if hasattr(html_content, 'data'):
+            html_str = html_content.data
+        elif isinstance(html_content, str):
+            html_str = html_content
+
+        # Parse entities
+        entities = []
+        if hasattr(result, "extractions"):
+            for ext in result.extractions:
+                entities.append({
+                    "class": ext.extraction_class,
+                    "text": ext.extraction_text,
+                    "attributes": ext.attributes if hasattr(ext, "attributes") else {},
+                })
+
+        return ExtractionResult(entities=entities, raw_text=text), html_str
+
     def format_entities_as_context(self, result: ExtractionResult) -> str:
         """Format extracted entities as structured context for LLM."""
         if not result.entities:

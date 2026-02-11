@@ -281,6 +281,9 @@
           <button class="btn btn-primary" onclick="processAll()" id="processBtn" style="flex:1;">
             🚀 생성하기
           </button>
+          <button class="btn btn-secondary" onclick="runVisualization()" id="vizBtn" title="LangExtract 시각화">
+            🔬
+          </button>
         </div>
 
         <div id="status"></div>
@@ -324,6 +327,21 @@
           </button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Visualization Modal -->
+  <div class="modal-overlay" id="vizModal">
+    <div class="modal" style="width:90vw; max-width:1200px; max-height:90vh;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h2>🔬 LangExtract 구조화 추출 시각화</h2>
+        <div>
+          <button class="btn btn-secondary" onclick="openVizNewTab()" style="margin-right:8px;">↗ 새 탭</button>
+          <button class="btn btn-secondary" onclick="closeVizModal()">✕</button>
+        </div>
+      </div>
+      <div id="vizEntities" style="margin-bottom:12px; font-size:0.85em; color:var(--text2);"></div>
+      <iframe id="vizFrame" style="width:100%; height:70vh; border:1px solid var(--border); border-radius:8px; background:white;"></iframe>
     </div>
   </div>
 
@@ -552,6 +570,57 @@
       const el = document.getElementById('status');
       el.className = `status ${type}`;
       el.innerHTML = msg;
+    }
+
+    // --- LangExtract Visualization ---
+    let lastVizHtml = '';
+
+    async function runVisualization() {
+      if (!sources.length) { alert('소스를 추가하세요'); return; }
+
+      const btn = document.getElementById('vizBtn');
+      btn.disabled = true;
+      setStatus('loading', '🔬 LangExtract 구조화 추출 + 시각화 생성 중... (1-2분 소요)');
+
+      try {
+        const profile = document.getElementById('extractProfile').value;
+        const resp = await fetch('/api/extract_viz', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({sources, profile}),
+        });
+        const data = await resp.json();
+
+        if (data.ok) {
+          lastVizHtml = data.html;
+          document.getElementById('vizEntities').textContent =
+            `추출된 엔티티: ${data.entities_count}개`;
+
+          // Load HTML into iframe
+          const frame = document.getElementById('vizFrame');
+          frame.srcdoc = data.html;
+
+          document.getElementById('vizModal').classList.add('show');
+          setStatus('success', `✅ 시각화 완료 (${data.entities_count}개 엔티티 추출)`);
+        } else {
+          setStatus('error', `❌ 추출 실패: ${data.error}`);
+        }
+      } catch (e) {
+        setStatus('error', `❌ 오류: ${e.message}`);
+      }
+
+      btn.disabled = false;
+    }
+
+    function closeVizModal() {
+      document.getElementById('vizModal').classList.remove('show');
+    }
+
+    function openVizNewTab() {
+      if (!lastVizHtml) return;
+      const w = window.open('', '_blank');
+      w.document.write(lastVizHtml);
+      w.document.close();
     }
 
     // --- Confluence Space/Page ---
