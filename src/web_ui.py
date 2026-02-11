@@ -220,7 +220,7 @@ class WebUI:
 
             # Extract content from sources
             contents = await self.router.extract_many(sources)
-            combined = "\n\n".join([c.content for c in contents])
+            combined = "\n\n".join([c.text for c in contents])
 
             # Run LangExtract
             from .extractor import StructuredExtractor
@@ -234,14 +234,11 @@ class WebUI:
             entities_data = []
             for entity in result.entities:
                 entity_dict = {
-                    "type": entity.type,
-                    "content": entity.content,
-                    "fields": entity.fields or {},
-                    "confidence": entity.spans[0].score if entity.spans else 0.0,
-                    "position": {
-                        "start": entity.spans[0].start,
-                        "end": entity.spans[0].end,
-                    } if entity.spans else None,
+                    "type": entity.get("class", "unknown"),
+                    "content": entity.get("text", ""),
+                    "fields": entity.get("attributes", {}),
+                    "confidence": 0.9,  # LangExtract doesn't provide confidence scores
+                    "position": None,  # Position info not available from current extraction
                 }
                 entities_data.append(entity_dict)
 
