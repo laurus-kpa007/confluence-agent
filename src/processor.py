@@ -4,6 +4,7 @@ import httpx
 
 from .adapters.base import SourceContent
 from .templates import TemplateManager
+from .extractor import StructuredExtractor
 
 
 class LLMProcessor:
@@ -21,17 +22,52 @@ class LLMProcessor:
         self.base_url = base_url
         self.api_key = api_key
         self.templates = TemplateManager()
+        self.extractor = None  # Lazy init
+
+    def _get_extractor(self) -> StructuredExtractor:
+        if not self.extractor:
+            # Use smaller model for extraction (faster)
+            self.extractor = StructuredExtractor(
+                model_id="gemma2:2b",
+                model_url=self.base_url if self.provider == "ollama" else None,
+                api_key=self.api_key if self.provider != "ollama" else None,
+            )
+        return self.extractor
 
     async def process(
         self,
         contents: List[SourceContent],
         template: str = "summary",
         output_format: str = "markdown",
+        use_langextract: bool = False,
+        extraction_profile: str = "general",
     ) -> str:
-        """Generate formatted content from extracted sources."""
+        """Generate formatted content from extracted sources.
+
+        Args:
+            use_langextract: If True, run LangExtract for structured extraction first
+            extraction_profile: LangExtract profile (meeting, tech_review, research, general)
+        """
 
         # Combine all source contents
         combined = self._combine_contents(contents)
+
+        # Optional: structured extraction with LangExtract
+        extraction_context = ""
+        if use_langextract:
+            try:
+                extractor = self._get_extractor()
+                # Extract from combined text (truncated for speed)
+                result = await extractor.extract(
+                    combined[:20000],
+                    profile=extraction_profile,
+                )
+                extraction_context = extractor.format_entities_as_context(result)
+                if extraction_context:
+                    combined = f"{extraction_context}\n\n---\n\n## 원본 자료\n{combined}"
+            except Exception as e:
+                # Fallback: continue without extraction
+                extraction_context = f"\n[LangExtract 추출 실패: {e}]\n"
 
         # Render template with content and format instructions
         prompt = self.templates.render(template, combined, output_format)

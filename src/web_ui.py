@@ -104,11 +104,16 @@ class WebUI:
         # Extract
         contents = await self.router.extract_many(sources)
 
+        use_langextract = data.get("use_langextract", False)
+        extraction_profile = data.get("extraction_profile", "general")
+
         # Process
         body = await self.processor.process(
             contents,
             template=template,
             output_format=output_format,
+            use_langextract=use_langextract,
+            extraction_profile=extraction_profile,
         )
 
         return web.json_response({
