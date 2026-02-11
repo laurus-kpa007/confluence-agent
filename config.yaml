@@ -1,0 +1,62 @@
+# Confluence Knowledge Agent Configuration
+
+llm:
+  provider: ollama
+  model: qwen3:14b-128k
+  base_url: http://localhost:11434
+  # provider: anthropic
+  # model: claude-sonnet-4-20250514
+  # api_key: ${ANTHROPIC_API_KEY}
+
+confluence:
+  url: https://your-domain.atlassian.net
+  username: your-email@company.com
+  api_token: ${CONFLUENCE_API_TOKEN}
+  default_space: TEAM
+
+# MCP servers for additional sources
+# Enable as needed and configure credentials
+mcp_servers:
+  gdrive:
+    enabled: false
+    command: npx
+    args: ["-y", "google-drive-mcp"]
+    env:
+      GOOGLE_APPLICATION_CREDENTIALS: "/path/to/credentials.json"
+
+  sharepoint:
+    enabled: false
+    command: npx
+    args: ["-y", "mcp-onedrive-sharepoint"]
+    env:
+      MICROSOFT_CLIENT_ID: ""
+      MICROSOFT_CLIENT_SECRET: ""
+      MICROSOFT_TENANT_ID: ""
+
+  notion:
+    enabled: false
+    command: npx
+    args: ["-y", "@notionhq/notion-mcp-server"]
+    env:
+      NOTION_API_KEY: ""
+
+  slack:
+    enabled: false
+    command: npx
+    args: ["-y", "@anthropic/mcp-slack"]
+    env:
+      SLACK_BOT_TOKEN: ""
+
+# Web search provider
+search:
+  provider: google          # google, brave, duckduckgo
+  api_key: ${GOOGLE_SEARCH_API_KEY}
+  cx_id: ${GOOGLE_SEARCH_CX_ID}   # Google Custom Search Engine ID
+  max_results: 3
+  # provider: brave
+  # api_key: ${BRAVE_API_KEY}
+  # provider: duckduckgo    # API key 불필요
+
+# Page templates
+templates:
+  default: summary

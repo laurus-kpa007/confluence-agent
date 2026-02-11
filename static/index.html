@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Confluence Knowledge Agent</title>
+  <style>
+    :root {
+      --bg: #1a1a2e;
+      --surface: #16213e;
+      --surface2: #0f3460;
+      --accent: #e94560;
+      --accent2: #533483;
+      --text: #eee;
+      --text2: #aab;
+      --border: #2a2a4a;
+      --success: #4ade80;
+      --warn: #fbbf24;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      font-family: -apple-system, 'Pretendard', 'Segoe UI', sans-serif;
+      background-color: #1a1a2e !important;
+      color: #eee !important;
+      min-height: 100vh;
+      width: 100%;
+    }
+    .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+    header {
+      display: flex; align-items: center; gap: 16px;
+      padding: 16px 0; border-bottom: 1px solid var(--border);
+      margin-bottom: 24px;
+    }
+    header h1 { font-size: 1.5em; }
+    header .badge {
+      background: var(--accent); padding: 4px 12px; border-radius: 12px;
+      font-size: 0.8em; font-weight: 600;
+    }
+
+    /* Layout */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 24px;
+      height: calc(100vh - 120px);
+    }
+
+    /* Left panel */
+    .panel {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 20px;
+      overflow-y: auto;
+    }
+    .panel h2 {
+      font-size: 1.1em; margin-bottom: 16px;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    /* Source input */
+    .source-input {
+      display: flex; gap: 8px; margin-bottom: 12px;
+    }
+    .source-input input {
+      flex: 1; padding: 10px 14px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 0.9em;
+    }
+    .source-input input:focus { outline: none; border-color: var(--accent); }
+
+    .source-list {
+      list-style: none; margin-bottom: 20px;
+    }
+    .source-list li {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px; margin-bottom: 4px;
+      background: var(--bg); border-radius: 6px; font-size: 0.85em;
+    }
+    .source-list .type-badge {
+      font-size: 0.7em; padding: 2px 8px; border-radius: 4px;
+      background: var(--accent2); margin-right: 8px;
+    }
+    .source-list .remove { cursor: pointer; color: var(--accent); }
+
+    /* Options */
+    .option-group { margin-bottom: 16px; }
+    .option-group label {
+      display: block; font-size: 0.85em; color: var(--text2);
+      margin-bottom: 6px;
+    }
+    select, input[type="text"] {
+      width: 100%; padding: 8px 12px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: 0.9em;
+    }
+
+    /* Buttons */
+    .btn {
+      padding: 10px 20px; border: none; border-radius: 8px;
+      font-size: 0.9em; font-weight: 600; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-secondary { background: var(--surface2); color: var(--text); }
+    .btn-secondary:hover { background: var(--accent2); }
+    .btn-success { background: var(--success); color: #111; }
+    .btn-success:hover { opacity: 0.9; }
+    .btn-group { display: flex; gap: 8px; margin-top: 16px; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Right panel - Preview */
+    .preview-panel {
+      display: flex; flex-direction: column;
+    }
+    .preview-tabs {
+      display: flex; gap: 4px; margin-bottom: 12px;
+    }
+    .preview-tab {
+      padding: 8px 16px; background: var(--surface);
+      border-radius: 8px 8px 0 0; cursor: pointer;
+      font-size: 0.85em; color: var(--text2);
+    }
+    .preview-tab.active {
+      background: var(--surface2); color: var(--text);
+    }
+    .preview-content {
+      flex: 1; background: var(--surface);
+      border-radius: 0 12px 12px 12px;
+      overflow: hidden; position: relative;
+    }
+    .preview-rendered {
+      padding: 24px; overflow-y: auto; height: 100%;
+      line-height: 1.7;
+    }
+    .preview-rendered h1, .preview-rendered h2, .preview-rendered h3 {
+      margin: 16px 0 8px; color: var(--accent);
+    }
+    .preview-rendered table {
+      border-collapse: collapse; width: 100%; margin: 12px 0;
+    }
+    .preview-rendered th, .preview-rendered td {
+      border: 1px solid var(--border); padding: 8px 12px; text-align: left;
+    }
+    .preview-rendered th { background: var(--surface2); }
+    .preview-rendered code {
+      background: var(--bg); padding: 2px 6px; border-radius: 4px;
+      font-size: 0.9em;
+    }
+    .preview-rendered pre {
+      background: var(--bg); padding: 16px; border-radius: 8px;
+      overflow-x: auto; margin: 12px 0;
+    }
+    .preview-rendered a { color: var(--accent); }
+    .preview-rendered ul, .preview-rendered ol { padding-left: 24px; }
+
+    .preview-source {
+      padding: 16px; height: 100%;
+    }
+    .preview-source textarea {
+      width: 100%; height: 100%;
+      background: var(--bg); color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 16px; font-family: 'Consolas', monospace;
+      font-size: 0.85em; resize: none; line-height: 1.6;
+    }
+
+    /* Publish bar */
+    .publish-bar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 20px; background: var(--surface);
+      border-radius: 12px; margin-top: 12px;
+    }
+    .publish-bar input { flex: 1; }
+    .publish-bar .format-toggle {
+      display: flex; gap: 4px;
+    }
+    .format-toggle button {
+      padding: 6px 12px; background: var(--bg);
+      border: 1px solid var(--border); border-radius: 4px;
+      color: var(--text2); cursor: pointer; font-size: 0.8em;
+    }
+    .format-toggle button.active {
+      background: var(--accent2); border-color: var(--accent2);
+      color: white;
+    }
+
+    /* Status */
+    .status {
+      padding: 8px 12px; border-radius: 6px;
+      font-size: 0.85em; margin-top: 12px;
+    }
+    .status.loading { background: var(--surface2); color: var(--warn); }
+    .status.success { background: #1a3a2a; color: var(--success); }
+    .status.error { background: #3a1a1a; color: var(--accent); }
+
+    /* Template editor modal */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7); z-index: 100;
+      justify-content: center; align-items: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: var(--surface); border-radius: 16px;
+      padding: 24px; width: 700px; max-height: 80vh;
+      overflow-y: auto;
+    }
+    .modal h2 { margin-bottom: 16px; }
+    .modal textarea {
+      width: 100%; height: 400px;
+      background: var(--bg); color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 16px; font-family: monospace; font-size: 0.85em;
+      resize: vertical;
+    }
+    .modal .btn-group { justify-content: flex-end; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📚 Confluence Knowledge Agent</h1>
+      <span class="badge">v0.1</span>
+    </header>
+
+    <div class="main-grid">
+      <!-- Left Panel: Sources & Options -->
+      <div class="panel">
+        <h2>📥 소스 입력</h2>
+
+        <div class="source-input">
+          <input type="text" id="sourceInput" placeholder="URL, 파일 경로, search:검색어, gdrive://..."
+                 onkeydown="if(event.key==='Enter') addSource()">
+          <button class="btn btn-primary" onclick="addSource()">+</button>
+        </div>
+
+        <ul class="source-list" id="sourceList"></ul>
+
+        <div class="option-group">
+          <label>📝 템플릿</label>
+          <div style="display:flex; gap:8px;">
+            <select id="templateSelect" style="flex:1;"></select>
+            <button class="btn btn-secondary" onclick="openTemplateEditor()" title="템플릿 편집">✏️</button>
+          </div>
+        </div>
+
+        <div class="option-group">
+          <label>📤 출력 포맷</label>
+          <select id="formatSelect">
+            <option value="markdown">마크다운 (Markdown 매크로)</option>
+            <option value="confluence">Confluence XHTML</option>
+          </select>
+        </div>
+
+        <div class="option-group">
+          <label>🤖 LLM</label>
+          <select id="llmSelect">
+            <option value="ollama">Ollama (로컬)</option>
+            <option value="anthropic">Claude (클라우드)</option>
+          </select>
+        </div>
+
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="processAll()" id="processBtn" style="flex:1;">
+            🚀 생성하기
+          </button>
+        </div>
+
+        <div id="status"></div>
+      </div>
+
+      <!-- Right Panel: Preview -->
+      <div class="preview-panel">
+        <div class="preview-tabs">
+          <div class="preview-tab active" onclick="switchTab('rendered')">👁 프리뷰</div>
+          <div class="preview-tab" onclick="switchTab('source')">📝 소스 편집</div>
+        </div>
+
+        <div class="preview-content">
+          <div class="preview-rendered" id="previewRendered">
+            <p style="color: var(--text2); text-align: center; margin-top: 40%;">
+              소스를 추가하고 "생성하기"를 클릭하세요
+            </p>
+          </div>
+          <div class="preview-source" id="previewSource" style="display:none;">
+            <textarea id="sourceEditor" placeholder="생성된 마크다운/XHTML이 여기에 표시됩니다. 직접 편집 가능합니다."></textarea>
+          </div>
+        </div>
+
+        <!-- Publish bar -->
+        <div class="publish-bar">
+          <input type="text" id="pageTitle" placeholder="페이지 제목">
+          <input type="text" id="spaceKey" placeholder="Space" style="width:80px;">
+          <div class="format-toggle">
+            <button id="fmtMd" class="active" onclick="setPublishFormat('markdown')">MD</button>
+            <button id="fmtConf" onclick="setPublishFormat('confluence')">XHTML</button>
+          </div>
+          <button class="btn btn-success" onclick="publishToConfluence()" id="publishBtn" disabled>
+            📤 게시
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Template Editor Modal -->
+  <div class="modal-overlay" id="templateModal">
+    <div class="modal">
+      <h2>✏️ 템플릿 편집</h2>
+      <div class="option-group">
+        <label>템플릿 이름</label>
+        <input type="text" id="tmplName" placeholder="새 템플릿 이름">
+      </div>
+      <textarea id="tmplEditor"></textarea>
+      <div class="btn-group">
+        <button class="btn btn-secondary" onclick="closeTemplateEditor()">취소</button>
+        <button class="btn btn-primary" onclick="saveTemplate()">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Markdown rendering - inline fallback if CDN fails -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    // Fallback: if marked didn't load from CDN, provide a simple markdown renderer
+    if (typeof marked === 'undefined') {
+      window.marked = {
+        parse: function(md) {
+          return md
+            .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+            .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+            .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/`(.*?)`/g, '<code>$1</code>')
+            .replace(/\n/g, '<br>');
+        }
+      };
+    }
+  </script>
+  <script>
+    // State
+    let sources = [];
+    let generatedBody = '';
+    let publishFormat = 'markdown';
+
+    // --- Sources ---
+    function addSource() {
+      const input = document.getElementById('sourceInput');
+      const val = input.value.trim();
+      if (!val) return;
+      sources.push(val);
+      input.value = '';
+      renderSources();
+    }
+
+    function removeSource(i) {
+      sources.splice(i, 1);
+      renderSources();
+    }
+
+    function detectType(s) {
+      if (s.startsWith('search:')) return '🔍';
+      if (s.match(/youtu/)) return '🎬';
+      if (s.match(/drive\.google|gdrive:/)) return '📁';
+      if (s.match(/sharepoint|onedrive/)) return '☁️';
+      if (s.match(/^https?:/)) return '🌐';
+      return '📄';
+    }
+
+    function renderSources() {
+      const ul = document.getElementById('sourceList');
+      ul.innerHTML = sources.map((s, i) => `
+        <li>
+          <span><span class="type-badge">${detectType(s)}</span>${s.length > 50 ? s.slice(0,50)+'...' : s}</span>
+          <span class="remove" onclick="removeSource(${i})">✕</span>
+        </li>
+      `).join('');
+    }
+
+    // --- Templates ---
+    async function loadTemplates() {
+      const resp = await fetch('/api/templates');
+      const templates = await resp.json();
+      const sel = document.getElementById('templateSelect');
+      sel.innerHTML = templates.map(t =>
+        `<option value="${t.name}">${t.name}</option>`
+      ).join('');
+    }
+
+    async function openTemplateEditor() {
+      const name = document.getElementById('templateSelect').value;
+      const resp = await fetch(`/api/templates/${name}`);
+      const data = await resp.json();
+      document.getElementById('tmplName').value = data.name;
+      document.getElementById('tmplEditor').value = data.content;
+      document.getElementById('templateModal').classList.add('show');
+    }
+
+    function closeTemplateEditor() {
+      document.getElementById('templateModal').classList.remove('show');
+    }
+
+    async function saveTemplate() {
+      const name = document.getElementById('tmplName').value.trim();
+      const content = document.getElementById('tmplEditor').value;
+      if (!name) return;
+
+      await fetch(`/api/templates/${name}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({content}),
+      });
+      closeTemplateEditor();
+      loadTemplates();
+      setStatus('success', `템플릿 "${name}" 저장 완료`);
+    }
+
+    // --- Process ---
+    async function processAll() {
+      if (!sources.length) return;
+
+      const btn = document.getElementById('processBtn');
+      btn.disabled = true;
+      setStatus('loading', '🔄 소스 추출 중...');
+
+      try {
+        const template = document.getElementById('templateSelect').value;
+        const format = document.getElementById('formatSelect').value;
+
+        setStatus('loading', '🤖 LLM 처리 중...');
+        const resp = await fetch('/api/process', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({sources, template, format}),
+        });
+
+        const data = await resp.json();
+        generatedBody = data.body;
+
+        // Update preview
+        updatePreview();
+        document.getElementById('sourceEditor').value = generatedBody;
+        document.getElementById('publishBtn').disabled = false;
+
+        setStatus('success', `✅ 생성 완료 (${data.sources_count}개 소스, ${generatedBody.length}자)`);
+      } catch (e) {
+        setStatus('error', `❌ 오류: ${e.message}`);
+      }
+
+      btn.disabled = false;
+    }
+
+    function updatePreview() {
+      const div = document.getElementById('previewRendered');
+      const format = document.getElementById('formatSelect').value;
+      if (format === 'markdown') {
+        div.innerHTML = marked.parse(generatedBody);
+      } else {
+        div.innerHTML = generatedBody;
+      }
+    }
+
+    // --- Tabs ---
+    function switchTab(tab) {
+      document.querySelectorAll('.preview-tab').forEach(t => t.classList.remove('active'));
+      event.target.classList.add('active');
+
+      if (tab === 'rendered') {
+        document.getElementById('previewRendered').style.display = '';
+        document.getElementById('previewSource').style.display = 'none';
+        // Sync edits back
+        generatedBody = document.getElementById('sourceEditor').value;
+        updatePreview();
+      } else {
+        document.getElementById('previewRendered').style.display = 'none';
+        document.getElementById('previewSource').style.display = '';
+      }
+    }
+
+    // --- Publish ---
+    function setPublishFormat(fmt) {
+      publishFormat = fmt;
+      document.getElementById('fmtMd').classList.toggle('active', fmt === 'markdown');
+      document.getElementById('fmtConf').classList.toggle('active', fmt === 'confluence');
+    }
+
+    async function publishToConfluence() {
+      const title = document.getElementById('pageTitle').value.trim();
+      if (!title) { alert('페이지 제목을 입력하세요'); return; }
+
+      // Get latest edits
+      generatedBody = document.getElementById('sourceEditor').value || generatedBody;
+
+      const body = {
+        title,
+        body: generatedBody,
+        space: document.getElementById('spaceKey').value.trim() || undefined,
+        use_markdown: publishFormat === 'markdown',
+      };
+
+      setStatus('loading', '📤 Confluence에 게시 중...');
+
+      try {
+        const resp = await fetch('/api/publish', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(body),
+        });
+        const data = await resp.json();
+
+        if (data.ok) {
+          setStatus('success', `✅ 게시 완료! <a href="${data.url}" target="_blank">${data.url}</a>`);
+        } else {
+          setStatus('error', `❌ 게시 실패: ${data.error}`);
+        }
+      } catch (e) {
+        setStatus('error', `❌ 오류: ${e.message}`);
+      }
+    }
+
+    // --- Status ---
+    function setStatus(type, msg) {
+      const el = document.getElementById('status');
+      el.className = `status ${type}`;
+      el.innerHTML = msg;
+    }
+
+    // --- Init ---
+    loadTemplates();
+  </script>
+</body>
+</html>
