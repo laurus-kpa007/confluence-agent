@@ -158,8 +158,28 @@ class TemplateManager:
         if path.exists():
             path.unlink()
 
-    def render(self, name: str, content: str, output_format: str = "markdown") -> str:
-        """Render template with content and format instructions."""
+    def render(self, name: str, content: str, output_format: str = "markdown", length: str = "normal") -> str:
+        """Render template with content and format instructions.
+
+        Args:
+            name: Template name
+            content: Source content
+            output_format: markdown or confluence
+            length: Output length - "compact", "normal", "detailed", "comprehensive"
+        """
         template = self.get_template(name)
         fmt = FORMAT_INSTRUCTIONS.get(output_format, FORMAT_INSTRUCTIONS["markdown"])
-        return template.format(content=content, format_instructions=fmt)
+
+        # Add length instructions
+        length_instructions = {
+            "compact": "간결하게 핵심만 요약 (현재 분량의 50%)",
+            "normal": "적당한 분량으로 정리 (기본)",
+            "detailed": "상세하게 정리 (현재 분량의 2배, 더 많은 예시와 설명 포함)",
+            "comprehensive": "매우 상세하게 정리 (현재 분량의 3배, 모든 세부사항 포함)",
+        }
+        length_inst = length_instructions.get(length, length_instructions["normal"])
+
+        # Combine format and length instructions
+        combined_instructions = f"{fmt}\n길이: {length_inst}"
+
+        return template.format(content=content, format_instructions=combined_instructions)

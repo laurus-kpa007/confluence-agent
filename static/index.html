@@ -187,12 +187,38 @@
 
     /* Status */
     .status {
-      padding: 8px 12px; border-radius: 6px;
+      padding: 12px 16px; border-radius: 8px;
       font-size: 0.85em; margin-top: 12px;
     }
     .status.loading { background: var(--surface2); color: var(--warn); }
     .status.success { background: #1a3a2a; color: var(--success); }
     .status.error { background: #3a1a1a; color: var(--accent); }
+
+    /* Progress */
+    .progress-container {
+      margin-top: 8px;
+    }
+    .progress-bar {
+      width: 100%; height: 6px;
+      background: var(--bg); border-radius: 3px;
+      overflow: hidden; margin-bottom: 8px;
+    }
+    .progress-fill {
+      height: 100%; background: linear-gradient(90deg, var(--accent2), var(--accent));
+      transition: width 0.3s ease;
+      border-radius: 3px;
+    }
+    .progress-steps {
+      display: flex; flex-direction: column; gap: 4px;
+      font-size: 0.75em; color: var(--text2);
+    }
+    .progress-step {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 0;
+    }
+    .progress-step.active { color: var(--warn); font-weight: 600; }
+    .progress-step.done { color: var(--success); }
+    .progress-step .icon { width: 16px; text-align: center; }
 
     /* Template editor modal */
     .modal-overlay {
@@ -230,9 +256,13 @@
         <h2>📥 소스 입력</h2>
 
         <div class="source-input">
-          <input type="text" id="sourceInput" placeholder="URL, 파일 경로, search:검색어, gdrive://..."
+          <input type="text" id="sourceInput" placeholder="URL, 검색어 (자동 검색), search:검색어, 파일 경로..."
                  onkeydown="if(event.key==='Enter') addSource()">
           <button class="btn btn-primary" onclick="addSource()">+</button>
+        </div>
+
+        <div style="font-size:0.75em; color:var(--text2); margin-bottom:12px; padding:0 4px;">
+          💡 팁: 일반 텍스트는 자동으로 웹 검색됩니다
         </div>
 
         <ul class="source-list" id="sourceList"></ul>
@@ -250,6 +280,16 @@
           <select id="formatSelect">
             <option value="markdown">마크다운 (Markdown 매크로)</option>
             <option value="confluence">Confluence XHTML</option>
+          </select>
+        </div>
+
+        <div class="option-group">
+          <label>📏 출력 길이</label>
+          <select id="lengthSelect">
+            <option value="compact">간결 (50% - 핵심만)</option>
+            <option value="normal" selected>보통 (100% - 기본)</option>
+            <option value="detailed">상세 (200% - 예시 포함)</option>
+            <option value="comprehensive">매우 상세 (300% - 모든 세부사항)</option>
           </select>
         </div>
 
@@ -464,31 +504,61 @@
 
       const btn = document.getElementById('processBtn');
       btn.disabled = true;
-      setStatus('loading', '🔄 소스 추출 중...');
 
       try {
         const template = document.getElementById('templateSelect').value;
         const format = document.getElementById('formatSelect').value;
-
-        setStatus('loading', '🤖 LLM 처리 중...');
         const useLangExtract = document.getElementById('useLangExtract').checked;
         const extractProfile = document.getElementById('extractProfile').value;
+
+        // Step 1: Extracting sources
+        updateProgress(1, 3, '📥 소스에서 텍스트 추출 중...');
+
+        // Simulate progress (since we can't track real server progress)
+        const progressInterval = setInterval(() => {
+          // This will be cleared when response arrives
+        }, 100);
+
+        const startTime = Date.now();
+
+        const outputLength = document.getElementById('lengthSelect').value;
 
         const resp = await fetch('/api/process', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({sources, template, format, use_langextract: useLangExtract, extraction_profile: extractProfile}),
+          body: JSON.stringify({
+            sources,
+            template,
+            format,
+            use_langextract: useLangExtract,
+            extraction_profile: extractProfile,
+            output_length: outputLength
+          }),
         });
+
+        clearInterval(progressInterval);
+
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error(`서버 오류 (${resp.status}): ${text.substring(0, 200)}`);
+        }
+
+        // Step 2: Processing with LLM
+        updateProgress(2, 3, '🤖 LLM으로 정리 중...');
 
         const data = await resp.json();
         generatedBody = data.body;
+
+        // Step 3: Formatting
+        updateProgress(3, 3, '✨ 최종 포맷팅 중...');
 
         // Update preview
         updatePreview();
         document.getElementById('sourceEditor').value = generatedBody;
         document.getElementById('publishBtn').disabled = false;
 
-        setStatus('success', `✅ 생성 완료 (${data.sources_count}개 소스, ${generatedBody.length}자)`);
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        setStatus('success', `✅ 생성 완료 (${data.sources_count}개 소스, ${generatedBody.length}자, ${elapsed}초 소요)`);
       } catch (e) {
         setStatus('error', `❌ 오류: ${e.message}`);
       }
@@ -545,7 +615,13 @@
         use_markdown: publishFormat === 'markdown',
       };
 
-      setStatus('loading', '📤 Confluence에 게시 중...');
+      // Publishing progress
+      const publishSteps = [
+        { text: '1. Confluence 연결 중...', status: 'active' },
+        { text: '2. 페이지 생성 중...', status: 'pending' },
+        { text: '3. 완료', status: 'pending' },
+      ];
+      setStatus('loading', '📤 Confluence에 게시 중...', { percent: 33, steps: publishSteps });
 
       try {
         const resp = await fetch('/api/publish', {
@@ -553,10 +629,23 @@
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(body),
         });
+
+        // Update progress
+        publishSteps[0].status = 'done';
+        publishSteps[1].status = 'active';
+        setStatus('loading', '📤 페이지 생성 중...', { percent: 66, steps: publishSteps });
+
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error(`서버 오류 (${resp.status}): ${text.substring(0, 200)}`);
+        }
+
         const data = await resp.json();
 
         if (data.ok) {
-          setStatus('success', `✅ 게시 완료! <a href="${data.url}" target="_blank">${data.url}</a>`);
+          publishSteps[1].status = 'done';
+          publishSteps[2].status = 'done';
+          setStatus('success', `✅ 게시 완료! <a href="${data.url}" target="_blank" style="color: var(--success); text-decoration: underline;">${data.title}</a>`);
         } else {
           setStatus('error', `❌ 게시 실패: ${data.error}`);
         }
@@ -566,10 +655,41 @@
     }
 
     // --- Status ---
-    function setStatus(type, msg) {
+    function setStatus(type, msg, progress = null) {
       const el = document.getElementById('status');
       el.className = `status ${type}`;
-      el.innerHTML = msg;
+
+      let html = msg;
+
+      // Add progress bar if provided
+      if (progress) {
+        html += '<div class="progress-container">';
+        html += `<div class="progress-bar"><div class="progress-fill" style="width: ${progress.percent}%"></div></div>`;
+
+        if (progress.steps) {
+          html += '<div class="progress-steps">';
+          progress.steps.forEach(step => {
+            const icon = step.status === 'done' ? '✅' : step.status === 'active' ? '⏳' : '⏺';
+            const cls = step.status === 'done' ? 'done' : step.status === 'active' ? 'active' : '';
+            html += `<div class="progress-step ${cls}"><span class="icon">${icon}</span><span>${step.text}</span></div>`;
+          });
+          html += '</div>';
+        }
+        html += '</div>';
+      }
+
+      el.innerHTML = html;
+    }
+
+    function updateProgress(currentStep, totalSteps, stepName) {
+      const percent = Math.round((currentStep / totalSteps) * 100);
+      const steps = [
+        { text: '1. 소스 추출 중...', status: currentStep > 1 ? 'done' : currentStep === 1 ? 'active' : 'pending' },
+        { text: '2. LLM 처리 중...', status: currentStep > 2 ? 'done' : currentStep === 2 ? 'active' : 'pending' },
+        { text: '3. 포맷팅 중...', status: currentStep > 3 ? 'done' : currentStep === 3 ? 'active' : 'pending' },
+      ];
+
+      setStatus('loading', stepName, { percent, steps });
     }
 
     // --- LangExtract Visualization ---
@@ -580,15 +700,40 @@
 
       const btn = document.getElementById('vizBtn');
       btn.disabled = true;
-      setStatus('loading', '🔬 LangExtract 구조화 추출 + 시각화 생성 중... (1-2분 소요)');
+
+      // LangExtract progress
+      const vizSteps = [
+        { text: '1. 소스 텍스트 추출 중...', status: 'active' },
+        { text: '2. 구조화 정보 분석 중... (1-2분)', status: 'pending' },
+        { text: '3. 시각화 생성 중...', status: 'pending' },
+      ];
+      setStatus('loading', '🔬 LangExtract 처리 중...', { percent: 10, steps: vizSteps });
 
       try {
         const profile = document.getElementById('extractProfile').value;
+
+        // Simulate extraction progress
+        setTimeout(() => {
+          vizSteps[0].status = 'done';
+          vizSteps[1].status = 'active';
+          setStatus('loading', '🔬 LangExtract 분석 중... (시간이 걸릴 수 있습니다)', { percent: 40, steps: vizSteps });
+        }, 500);
+
         const resp = await fetch('/api/extract_viz', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({sources, profile}),
         });
+
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error(`서버 오류 (${resp.status}): ${text.substring(0, 200)}`);
+        }
+
+        vizSteps[1].status = 'done';
+        vizSteps[2].status = 'active';
+        setStatus('loading', '🔬 시각화 생성 중...', { percent: 80, steps: vizSteps });
+
         const data = await resp.json();
 
         if (data.ok) {
@@ -600,6 +745,7 @@
           const frame = document.getElementById('vizFrame');
           frame.srcdoc = data.html;
 
+          vizSteps[2].status = 'done';
           document.getElementById('vizModal').classList.add('show');
           setStatus('success', `✅ 시각화 완료 (${data.entities_count}개 엔티티 추출)`);
         } else {

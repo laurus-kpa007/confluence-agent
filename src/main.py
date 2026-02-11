@@ -1,25 +1,23 @@
 """CLI entrypoint for Confluence Knowledge Agent."""
 import asyncio
 import argparse
-import yaml
 from pathlib import Path
 
 from .router import SourceRouter
 from .processor import LLMProcessor
 from .publisher import ConfluencePublisher
+from .config_loader import load_config as load_config_with_env, get_search_config
 
 # Optional MCP adapters
 from .adapters.gdrive import GDriveAdapter
 from .adapters.sharepoint import SharePointAdapter
 
 CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
+ENV_PATH = Path(__file__).parent.parent / ".env"
 
 
 def load_config() -> dict:
-    if CONFIG_PATH.exists():
-        with open(CONFIG_PATH) as f:
-            return yaml.safe_load(f)
-    return {}
+    return load_config_with_env(CONFIG_PATH, ENV_PATH)
 
 
 def build_router(config: dict) -> SourceRouter:
@@ -32,7 +30,13 @@ def build_router(config: dict) -> SourceRouter:
     if mcp.get("sharepoint", {}).get("enabled"):
         extra.append(SharePointAdapter())
 
-    return SourceRouter(extra_adapters=extra if extra else None)
+    # Get search config for WebSearchAdapter
+    search_config = get_search_config(config)
+
+    return SourceRouter(
+        extra_adapters=extra if extra else None,
+        search_config=search_config,
+    )
 
 
 async def run(args):
@@ -57,8 +61,9 @@ async def run(args):
 
     # 2. Process with LLM
     template = args.template or config.get("templates", {}).get("default", "summary")
-    print(f"🤖 Processing with {processor.model} (template: {template})...")
-    body = await processor.process(contents, template=template)
+    output_length = getattr(args, 'length', 'normal')
+    print(f"🤖 Processing with {processor.model} (template: {template}, length: {output_length})...")
+    body = await processor.process(contents, template=template, output_length=output_length)
     print(f"  ✅ Generated {len(body)} chars")
 
     # 3. Publish to Confluence (if configured)
@@ -101,6 +106,8 @@ def main():
     cli.add_argument("--title", "-t", help="Page title")
     cli.add_argument("--template", choices=["summary", "meeting_notes", "tech_doc", "research"])
     cli.add_argument("--format", choices=["markdown", "confluence"], default="markdown")
+    cli.add_argument("--length", "-l", choices=["compact", "normal", "detailed", "comprehensive"],
+                     default="normal", help="Output length (compact=50%%, normal=100%%, detailed=200%%, comprehensive=300%%)")
     cli.add_argument("--parent-id", help="Parent page ID")
     cli.add_argument("--dry-run", action="store_true", help="Don't publish, just print")
     cli.add_argument("--config", "-c", help="Config file path")

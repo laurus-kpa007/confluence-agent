@@ -98,32 +98,41 @@ class WebUI:
 
     async def _process(self, request):
         """Process extracted content with LLM."""
-        data = await request.json()
-        sources = data.get("sources", [])
-        template = data.get("template", "summary")
-        output_format = data.get("format", "confluence")  # confluence or markdown
+        try:
+            data = await request.json()
+            sources = data.get("sources", [])
+            template = data.get("template", "summary")
+            output_format = data.get("format", "confluence")  # confluence or markdown
 
-        # Extract
-        contents = await self.router.extract_many(sources)
+            # Extract
+            contents = await self.router.extract_many(sources)
 
-        use_langextract = data.get("use_langextract", False)
-        extraction_profile = data.get("extraction_profile", "general")
+            use_langextract = data.get("use_langextract", False)
+            extraction_profile = data.get("extraction_profile", "general")
+            output_length = data.get("output_length", "normal")
 
-        # Process
-        body = await self.processor.process(
-            contents,
-            template=template,
-            output_format=output_format,
-            use_langextract=use_langextract,
-            extraction_profile=extraction_profile,
-        )
+            # Process
+            body = await self.processor.process(
+                contents,
+                template=template,
+                output_format=output_format,
+                use_langextract=use_langextract,
+                extraction_profile=extraction_profile,
+                output_length=output_length,
+            )
 
-        return web.json_response({
-            "body": body,
-            "format": output_format,
-            "template": template,
-            "sources_count": len(contents),
-        })
+            return web.json_response({
+                "body": body,
+                "format": output_format,
+                "template": template,
+                "sources_count": len(contents),
+            })
+        except Exception as e:
+            import traceback
+            return web.json_response({
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+            }, status=500)
 
     async def _publish(self, request):
         """Publish to Confluence."""

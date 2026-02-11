@@ -2,6 +2,14 @@
 
 멀티소스 자료를 수집 → 로컬 LLM으로 정리 → Confluence에 자동 삽입하는 경량 에이전트
 
+**📖 문서:**
+- **[⚡ QUICKSTART.md](QUICKSTART.md)** - 5분 안에 시작하기
+- **[🔧 SETUP.md](SETUP.md)** - 상세 설정 가이드
+- **[🩺 TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - 문제 해결 가이드
+- **[🔬 LANGEXTRACT_USAGE.md](LANGEXTRACT_USAGE.md)** - LangExtract 사용법 및 역할
+- **[📊 ANALYSIS.md](ANALYSIS.md)** - 기술 분석 보고서
+- **[📝 CHANGELOG.md](CHANGELOG.md)** - 변경 이력
+
 ## 아키텍처
 
 ```
@@ -149,3 +157,45 @@ templates:
     - tech_doc       # 기술 문서
     - research       # 리서치 노트
 ```
+
+## 빠른 시작
+
+### 1. 설치
+```bash
+# 가상환경 생성 및 활성화
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+
+# 패키지 설치
+pip install -e ".[all]"
+```
+
+### 2. 환경 설정
+```bash
+# .env 파일 생성
+cp .env.example .env
+
+# .env 편집 - Confluence 정보 입력
+CONFLUENCE_URL=https://your-domain.atlassian.net
+CONFLUENCE_USERNAME=your-email@company.com
+CONFLUENCE_API_TOKEN=your_api_token
+```
+
+### 3. Ollama 설치 (로컬 LLM)
+```bash
+# https://ollama.com 에서 다운로드 후
+ollama pull qwen3:14b-128k
+ollama pull gemma2:2b
+```
+
+### 4. 실행
+```bash
+# CLI 모드 - Dry run (Confluence에 발행하지 않음)
+python -m src.main run "https://example.com" --dry-run
+
+# Web UI 모드
+python -m src.main ui
+# 브라우저: http://127.0.0.1:8501
+```
+
+**자세한 설정 방법은 [SETUP.md](SETUP.md)를 참조하세요.**

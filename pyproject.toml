@@ -19,12 +19,16 @@ pdf = ["pymupdf>=1.24"]
 docx = ["python-docx>=1.0"]
 youtube = ["yt-dlp>=2024.1"]
 excel = ["pandas>=2.0", "openpyxl>=3.1"]
+search = ["duckduckgo-search>=6.0"]
+extract = ["langextract>=1.1"]
 all = [
     "pymupdf>=1.24",
     "python-docx>=1.0",
     "yt-dlp>=2024.1",
     "pandas>=2.0",
     "openpyxl>=3.1",
+    "duckduckgo-search>=6.0",
+    "langextract>=1.1",
 ]
 
 [project.scripts]
