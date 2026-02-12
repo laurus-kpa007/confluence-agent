@@ -32,9 +32,9 @@ class LLMProcessor:
 
     def _get_extractor(self) -> StructuredExtractor:
         if not self.extractor:
-            # Use smaller model for extraction (faster)
+            # Use same model as main LLM for consistency and speed
             self.extractor = StructuredExtractor(
-                model_id="gemma2:2b",
+                model_id=self.model,  # Use main model (e.g., gemma3:4b)
                 model_url=self.base_url if self.provider == "ollama" else None,
                 api_key=self.api_key if self.provider != "ollama" else None,
             )

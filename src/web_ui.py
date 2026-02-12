@@ -186,9 +186,15 @@ class WebUI:
             # Run LangExtract with visualization
             from .extractor import StructuredExtractor
             import tempfile
+
+            # Use config model for consistency
+            llm_config = self.config.get("llm", {})
+            model = llm_config.get("model", "gemma3:4b")
+            base_url = llm_config.get("base_url", "http://localhost:11434")
+
             extractor = StructuredExtractor(
-                model_id="gemma2:2b",
-                model_url="http://localhost:11434",
+                model_id=model,
+                model_url=base_url,
             )
             with tempfile.TemporaryDirectory() as tmpdir:
                 result, html_str = await extractor.extract_with_visualization(
@@ -257,11 +263,16 @@ class WebUI:
 
             # Run LangExtract
             from .extractor import StructuredExtractor
+            # Use config model for consistency
+            llm_config = self.config.get("llm", {})
+            model = llm_config.get("model", "gemma3:4b")
+            base_url = llm_config.get("base_url", "http://localhost:11434")
+
             extractor = StructuredExtractor(
-                model_id="gemma2:2b",
-                model_url="http://localhost:11434",
+                model_id=model,
+                model_url=base_url,
             )
-            result = await extractor.extract(combined[:20000], profile=profile)
+            result = await extractor.extract(combined[:5000], profile=profile)
 
             # Convert entities to JSON-serializable format
             entities_data = []
