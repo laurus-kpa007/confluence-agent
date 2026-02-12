@@ -220,9 +220,35 @@ class WebUI:
             sources = data.get("sources", [])
             profile = data.get("profile", "general")
 
+            # Validate sources
+            if not sources or len(sources) == 0:
+                return web.json_response({
+                    "ok": False,
+                    "error": "소스가 비어있습니다. 최소 1개의 소스를 추가하세요.",
+                }, status=400)
+
             # Extract content from sources
-            contents = await self.router.extract_many(sources)
+            try:
+                contents = await self.router.extract_many(sources)
+            except FileNotFoundError as e:
+                return web.json_response({
+                    "ok": False,
+                    "error": f"파일을 찾을 수 없습니다: {str(e)}",
+                }, status=404)
+            except ValueError as e:
+                return web.json_response({
+                    "ok": False,
+                    "error": f"소스 처리 오류: {str(e)}",
+                }, status=400)
+
             combined = "\n\n".join([c.text for c in contents])
+
+            # Check if combined text is too short
+            if len(combined.strip()) < 10:
+                return web.json_response({
+                    "ok": False,
+                    "error": "추출된 텍스트가 너무 짧습니다 (최소 10자 필요).",
+                }, status=400)
 
             # Run LangExtract
             from .extractor import StructuredExtractor
@@ -253,10 +279,14 @@ class WebUI:
             })
         except Exception as e:
             import traceback
+            error_msg = str(e)
+            tb = traceback.format_exc()
+            print(f"❌ Entity extraction error: {error_msg}")
+            print(tb)
             return web.json_response({
                 "ok": False,
-                "error": str(e),
-                "traceback": traceback.format_exc(),
+                "error": error_msg if error_msg else f"{type(e).__name__} (no message)",
+                "traceback": tb,
             }, status=500)
 
     async def _entities_page(self, request):

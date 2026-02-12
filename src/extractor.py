@@ -148,12 +148,16 @@ class StructuredExtractor:
             examples.append(lx.data.ExampleData(text=ex["text"], extractions=extractions))
 
         # Run extraction
+        # Limit text size more aggressively for stability
+        max_chars = 10000  # Reduce from 50000 to avoid JSON parsing issues
+        text_chunk = text[:max_chars]
+
         kwargs = {
-            "text_or_documents": text[:50000],  # Limit input size
+            "text_or_documents": text_chunk,
             "prompt_description": prompt,
             "examples": examples,
             "model_id": self.model_id,
-            "fence_output": False,
+            "fence_output": True,  # Enable fence output for better JSON parsing
             "use_schema_constraints": False,
         }
 
@@ -163,7 +167,32 @@ class StructuredExtractor:
         elif self.api_key:
             kwargs["api_key"] = self.api_key
 
-        result = lx.extract(**kwargs)
+        try:
+            result = lx.extract(**kwargs)
+        except Exception as e:
+            error_msg = str(e)
+
+            # Try fallback with fence_output=False if it was a JSON parsing error
+            if "JSON" in error_msg or "parse" in error_msg.lower():
+                try:
+                    print(f"⚠️  JSON 파싱 오류 발생, fence_output=False로 재시도...")
+                    kwargs["fence_output"] = False
+                    # Also try with even smaller chunk
+                    kwargs["text_or_documents"] = text[:5000]
+                    result = lx.extract(**kwargs)
+                    print(f"✅ 재시도 성공!")
+                except Exception as e2:
+                    raise RuntimeError(
+                        f"LangExtract 추출 실패 (model: {self.model_id}, url: {self.model_url}):\n"
+                        f"첫 시도: {error_msg}\n"
+                        f"재시도: {str(e2)}\n"
+                        f"Ollama가 실행 중인지 확인하세요: http://localhost:11434"
+                    ) from e2
+            else:
+                raise RuntimeError(
+                    f"LangExtract 추출 실패 (model: {self.model_id}, url: {self.model_url}): {error_msg}\n"
+                    f"Ollama가 실행 중인지 확인하세요: http://localhost:11434"
+                ) from e
 
         # Parse results
         entities = []
