@@ -96,4 +96,5 @@ def get_search_config(config: dict) -> dict:
         "api_key": search.get("api_key", ""),
         "cx_id": search.get("cx_id", ""),
         "max_results": search.get("max_results", 3),
+        "proxy": search.get("proxy", ""),
     }

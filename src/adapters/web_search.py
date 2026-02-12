@@ -4,8 +4,9 @@ Searches the web for a query, then scrapes top results.
 Input format: "search:검색어" or "search:AI agent framework"
 """
 import logging
+import os
 import re
-from typing import List
+from typing import List, Optional
 from .base import BaseAdapter, SourceContent
 from .web import WebAdapter
 
@@ -17,14 +18,17 @@ class WebSearchAdapter(BaseAdapter):
 
     _PREFIX = "search:"
 
-    def __init__(self, provider: str = "google", api_key: str = "", cx_id: str = "", max_results: int = 3, ssl_verify: bool = True):
+    def __init__(self, provider: str = "google", api_key: str = "", cx_id: str = "",
+                 max_results: int = 3, ssl_verify: bool = True, proxy: str = ""):
         self.provider = provider  # google, brave, duckduckgo
         self.api_key = api_key
         self.cx_id = cx_id  # Google Custom Search Engine ID
         self.max_results = max_results
         self.ssl_verify = ssl_verify
+        self.proxy = proxy or os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or None
         self._scraper = WebAdapter(ssl_verify=ssl_verify)
-        logger.debug("WebSearchAdapter init: provider=%s, max_results=%d, ssl_verify=%s", provider, max_results, ssl_verify)
+        logger.debug("WebSearchAdapter init: provider=%s, max_results=%d, ssl_verify=%s, proxy=%s",
+                      provider, max_results, ssl_verify, self.proxy)
 
     def can_handle(self, source: str) -> bool:
         return source.lower().startswith(self._PREFIX)
@@ -76,7 +80,7 @@ class WebSearchAdapter(BaseAdapter):
     async def _google_search(self, query: str) -> List[str]:
         """Google Custom Search API (requires API key + CX ID)."""
         import httpx
-        async with httpx.AsyncClient(timeout=10.0, verify=self.ssl_verify) as client:
+        async with httpx.AsyncClient(timeout=10.0, verify=self.ssl_verify, proxy=self.proxy) as client:
             resp = await client.get(
                 "https://www.googleapis.com/customsearch/v1",
                 params={
@@ -92,7 +96,7 @@ class WebSearchAdapter(BaseAdapter):
 
     async def _brave_search(self, query: str) -> List[str]:
         import httpx
-        async with httpx.AsyncClient(timeout=10.0, verify=self.ssl_verify) as client:
+        async with httpx.AsyncClient(timeout=10.0, verify=self.ssl_verify, proxy=self.proxy) as client:
             resp = await client.get(
                 "https://api.search.brave.com/res/v1/web/search",
                 params={"q": query, "count": self.max_results},
@@ -110,14 +114,19 @@ class WebSearchAdapter(BaseAdapter):
             raise ImportError("pip install duckduckgo-search (or set search API key)")
 
         try:
-            logger.debug("DuckDuckGo search: query='%s', ssl_verify=%s", query, self.ssl_verify)
-            with DDGS(verify=self.ssl_verify) as ddgs:
+            logger.debug("DuckDuckGo search: query='%s', ssl_verify=%s, proxy=%s", query, self.ssl_verify, self.proxy)
+            with DDGS(verify=self.ssl_verify, proxy=self.proxy) as ddgs:
                 results = list(ddgs.text(query, max_results=self.max_results))
                 logger.debug("DuckDuckGo returned %d results", len(results))
                 return [r["href"] for r in results]
         except Exception as e:
             logger.error("DuckDuckGo search failed: %s", e)
-            raise ConnectionError(
-                f"검색 실패: {e}\n"
-                f"해결 방법: config.yaml에서 Google/Brave API 키를 설정하거나, 네트워크 연결을 확인하세요."
-            )
+            hints = [
+                f"검색 실패: {e}",
+                "해결 방법:",
+                "  1. config.yaml에서 ssl_verify: false 설정 (사내 인증서 환경)",
+                "  2. config.yaml search 섹션에 proxy 설정 (프록시 환경)",
+                "  3. Google/Brave API 키 설정",
+                "  4. 네트워크 연결 확인",
+            ]
+            raise ConnectionError("\n".join(hints))

@@ -58,6 +58,7 @@ search:
   api_key: ${GOOGLE_SEARCH_API_KEY}
   cx_id: ${GOOGLE_SEARCH_CX_ID}   # Google Custom Search Engine ID
   max_results: 3
+  # proxy: http://proxy.company.com:8080  # 프록시 환경 시 설정 (또는 HTTPS_PROXY 환경변수)
   # provider: brave
   # api_key: ${BRAVE_API_KEY}
   # provider: duckduckgo    # API key 불필요
