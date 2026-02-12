@@ -114,6 +114,7 @@ class WebUI:
             use_langextract = data.get("use_langextract", False)
             extraction_profile = data.get("extraction_profile", "general")
             output_length = data.get("output_length", "normal")
+            output_language = data.get("output_language", "ko")
 
             # Process
             body = await self.processor.process(
@@ -123,6 +124,7 @@ class WebUI:
                 use_langextract=use_langextract,
                 extraction_profile=extraction_profile,
                 output_length=output_length,
+                output_language=output_language,
             )
 
             return web.json_response({

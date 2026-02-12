@@ -48,6 +48,7 @@ class LLMProcessor:
         use_langextract: bool = False,
         extraction_profile: str = "general",
         output_length: str = "normal",
+        output_language: str = "ko",
     ) -> str:
         """Generate formatted content from extracted sources.
 
@@ -55,9 +56,10 @@ class LLMProcessor:
             use_langextract: If True, run LangExtract for structured extraction first
             extraction_profile: LangExtract profile (meeting, tech_review, research, general)
             output_length: Output length - "compact", "normal", "detailed", "comprehensive"
+            output_language: Output language code - "ko", "en", "ja", "zh"
         """
 
-        logger.info("Processing %d source(s), template=%s, length=%s", len(contents), template, output_length)
+        logger.info("Processing %d source(s), template=%s, length=%s, language=%s", len(contents), template, output_length, output_language)
 
         # Combine all source contents
         combined = self._combine_contents(contents)
@@ -82,7 +84,7 @@ class LLMProcessor:
                 extraction_context = f"\n[LangExtract 추출 실패: {e}]\n"
 
         # Render template with content and format instructions
-        prompt = self.templates.render(template, combined, output_format, output_length)
+        prompt = self.templates.render(template, combined, output_format, output_length, output_language)
 
         # Call LLM
         response = await self._call_llm(prompt)

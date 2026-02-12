@@ -158,7 +158,7 @@ class TemplateManager:
         if path.exists():
             path.unlink()
 
-    def render(self, name: str, content: str, output_format: str = "markdown", length: str = "normal") -> str:
+    def render(self, name: str, content: str, output_format: str = "markdown", length: str = "normal", language: str = "ko") -> str:
         """Render template with content and format instructions.
 
         Args:
@@ -166,6 +166,7 @@ class TemplateManager:
             content: Source content
             output_format: markdown or confluence
             length: Output length - "compact", "normal", "detailed", "comprehensive"
+            language: Output language code - "ko", "en", "ja", "zh"
         """
         template = self.get_template(name)
         fmt = FORMAT_INSTRUCTIONS.get(output_format, FORMAT_INSTRUCTIONS["markdown"])
@@ -202,7 +203,16 @@ class TemplateManager:
         }
         length_inst = length_instructions.get(length, length_instructions["normal"])
 
-        # Combine format and length instructions
-        combined_instructions = f"{fmt}\n길이: {length_inst}"
+        # Add language instructions
+        language_instructions = {
+            "ko": "**출력 언어: 한국어로 작성하세요.**",
+            "en": "**Output Language: Write in English.**",
+            "ja": "**出力言語: 日本語で書いてください。**",
+            "zh": "**输出语言：请用中文写。**",
+        }
+        language_inst = language_instructions.get(language, language_instructions["ko"])
+
+        # Combine format, length, and language instructions
+        combined_instructions = f"{fmt}\n길이: {length_inst}\n{language_inst}"
 
         return template.format(content=content, format_instructions=combined_instructions)
