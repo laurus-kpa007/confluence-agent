@@ -14,11 +14,12 @@ class WebSearchAdapter(BaseAdapter):
 
     _PREFIX = "search:"
 
-    def __init__(self, provider: str = "google", api_key: str = "", cx_id: str = "", max_results: int = 3):
+    def __init__(self, provider: str = "google", api_key: str = "", cx_id: str = "", max_results: int = 3, ssl_verify: bool = True):
         self.provider = provider  # google, brave, duckduckgo
         self.api_key = api_key
         self.cx_id = cx_id  # Google Custom Search Engine ID
         self.max_results = max_results
+        self.ssl_verify = ssl_verify
         self._scraper = WebAdapter()
 
     def can_handle(self, source: str) -> bool:
@@ -61,7 +62,7 @@ class WebSearchAdapter(BaseAdapter):
     async def _google_search(self, query: str) -> List[str]:
         """Google Custom Search API (requires API key + CX ID)."""
         import httpx
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, verify=self.ssl_verify) as client:
             resp = await client.get(
                 "https://www.googleapis.com/customsearch/v1",
                 params={
@@ -77,7 +78,7 @@ class WebSearchAdapter(BaseAdapter):
 
     async def _brave_search(self, query: str) -> List[str]:
         import httpx
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, verify=self.ssl_verify) as client:
             resp = await client.get(
                 "https://api.search.brave.com/res/v1/web/search",
                 params={"q": query, "count": self.max_results},

@@ -1,5 +1,10 @@
 # Confluence Knowledge Agent Configuration
 
+# SSL 인증서 검증 비활성화 (사내 자체 서명 인증서 사용 시)
+# true: 기본값, SSL 인증서 검증 활성화
+# false: SSL 인증서 검증 비활성화 (사내망/자체 서명 인증서 환경)
+ssl_verify: true
+
 llm:
   provider: ollama
   model: qwen3:14b-128k

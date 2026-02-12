@@ -6,7 +6,7 @@ from pathlib import Path
 from .router import SourceRouter
 from .processor import LLMProcessor
 from .publisher import ConfluencePublisher
-from .config_loader import load_config as load_config_with_env, get_search_config
+from .config_loader import load_config as load_config_with_env, get_search_config, get_ssl_verify
 
 # Optional MCP adapters
 from .adapters.gdrive import GDriveAdapter
@@ -32,6 +32,7 @@ def build_router(config: dict) -> SourceRouter:
 
     # Get search config for WebSearchAdapter
     search_config = get_search_config(config)
+    search_config["ssl_verify"] = get_ssl_verify(config)
 
     return SourceRouter(
         extra_adapters=extra if extra else None,
@@ -41,6 +42,7 @@ def build_router(config: dict) -> SourceRouter:
 
 async def run(args):
     config = load_config()
+    ssl_verify = get_ssl_verify(config)
 
     # Build components
     router = build_router(config)
@@ -51,6 +53,7 @@ async def run(args):
         model=llm_cfg.get("model", "qwen3:14b-128k"),
         base_url=llm_cfg.get("base_url", "http://localhost:11434"),
         api_key=llm_cfg.get("api_key"),
+        ssl_verify=ssl_verify,
     )
 
     # 1. Extract from all sources
@@ -73,6 +76,7 @@ async def run(args):
             url=conf_cfg["url"],
             username=conf_cfg["username"],
             api_token=conf_cfg["api_token"],
+            ssl_verify=ssl_verify,
         )
         space = args.space or conf_cfg.get("default_space", "TEAM")
         title = args.title or contents[0].title
@@ -125,6 +129,7 @@ def main():
             global CONFIG_PATH
             CONFIG_PATH = Path(args.config)
         config = load_config()
+        ssl_verify = get_ssl_verify(config)
         router = build_router(config)
         llm_cfg = config.get("llm", {})
         processor = LLMProcessor(
@@ -132,6 +137,7 @@ def main():
             model=llm_cfg.get("model", "qwen3:14b-128k"),
             base_url=llm_cfg.get("base_url", "http://localhost:11434"),
             api_key=llm_cfg.get("api_key"),
+            ssl_verify=ssl_verify,
         )
         from .web_ui import WebUI
         web_ui = WebUI(config, router, processor)

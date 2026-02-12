@@ -16,11 +16,13 @@ class LLMProcessor:
         model: str = "qwen3:14b-128k",
         base_url: str = "http://localhost:11434",
         api_key: Optional[str] = None,
+        ssl_verify: bool = True,
     ):
         self.provider = provider
         self.model = model
         self.base_url = base_url
         self.api_key = api_key
+        self.ssl_verify = ssl_verify
         self.templates = TemplateManager()
         self.extractor = None  # Lazy init
 
@@ -96,7 +98,7 @@ class LLMProcessor:
             raise ValueError(f"Unknown provider: {self.provider}")
 
     async def _call_ollama(self, prompt: str) -> str:
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=120.0, verify=self.ssl_verify) as client:
             resp = await client.post(
                 f"{self.base_url}/v1/chat/completions",
                 json={
@@ -110,7 +112,7 @@ class LLMProcessor:
             return resp.json()["choices"][0]["message"]["content"]
 
     async def _call_anthropic(self, prompt: str) -> str:
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=120.0, verify=self.ssl_verify) as client:
             resp = await client.post(
                 "https://api.anthropic.com/v1/messages",
                 headers={

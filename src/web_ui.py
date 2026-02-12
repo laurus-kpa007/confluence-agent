@@ -10,6 +10,7 @@ from .router import SourceRouter
 from .processor import LLMProcessor
 from .publisher import ConfluencePublisher
 from .templates import TemplateManager
+from .config_loader import get_ssl_verify
 
 STATIC_DIR = Path(__file__).parent.parent / "static"
 
@@ -28,6 +29,7 @@ class WebUI:
                 url=conf_cfg["url"],
                 username=conf_cfg["username"],
                 api_token=conf_cfg["api_token"],
+                ssl_verify=get_ssl_verify(config),
             )
 
         self.app = web.Application()

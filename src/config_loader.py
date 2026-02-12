@@ -71,6 +71,21 @@ def load_config(config_path: Path, env_path: Path = Path(".env")) -> dict:
     return expand_env_vars(config)
 
 
+def get_ssl_verify(config: dict) -> bool:
+    """Get SSL verification setting from config.
+
+    Supports config.yaml `ssl_verify` field and SSL_VERIFY environment variable.
+    Returns False only when explicitly set to false/False.
+    """
+    # Environment variable takes precedence
+    env_val = os.environ.get("SSL_VERIFY", "").lower()
+    if env_val in ("false", "0", "no"):
+        return False
+
+    # Then check config.yaml
+    return config.get("ssl_verify", True)
+
+
 def get_search_config(config: dict) -> dict:
     """Extract and validate search configuration."""
     search = config.get("search", {})

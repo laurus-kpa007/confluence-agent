@@ -6,13 +6,14 @@ import httpx
 class ConfluencePublisher:
     """Publish content to Confluence."""
 
-    def __init__(self, url: str, username: str, api_token: str):
+    def __init__(self, url: str, username: str, api_token: str, ssl_verify: bool = True):
         self.url = url.rstrip("/")
         self.auth = (username, api_token)
+        self.ssl_verify = ssl_verify
 
     async def list_spaces(self, limit: int = 50) -> List[dict]:
         """List all accessible spaces."""
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, verify=self.ssl_verify) as client:
             resp = await client.get(
                 f"{self.url}/rest/api/space",
                 params={"limit": limit, "type": "global"},
@@ -26,7 +27,7 @@ class ConfluencePublisher:
 
     async def list_pages(self, space_key: str, parent_id: Optional[str] = None, limit: int = 50) -> List[dict]:
         """List pages in a space, optionally under a parent."""
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, verify=self.ssl_verify) as client:
             if parent_id:
                 # Get child pages of a specific page
                 resp = await client.get(
@@ -64,7 +65,7 @@ class ConfluencePublisher:
         cql = f'type=page AND title~"{query}"'
         if space_key:
             cql += f' AND space="{space_key}"'
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, verify=self.ssl_verify) as client:
             resp = await client.get(
                 f"{self.url}/rest/api/content/search",
                 params={"cql": cql, "limit": limit},
@@ -91,7 +92,7 @@ class ConfluencePublisher:
 
         # Get children for each root
         tree = []
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, verify=self.ssl_verify) as client:
             for root in root_pages:
                 children = await self.list_pages(space_key, parent_id=root["id"])
                 tree.append({**root, "children": children})
@@ -119,7 +120,7 @@ class ConfluencePublisher:
         if parent_id:
             payload["ancestors"] = [{"id": parent_id}]
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, verify=self.ssl_verify) as client:
             resp = await client.post(
                 f"{self.url}/rest/api/content",
                 json=payload,
@@ -142,7 +143,7 @@ class ConfluencePublisher:
     ) -> dict:
         """Update an existing Confluence page."""
         # Get current version
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, verify=self.ssl_verify) as client:
             resp = await client.get(
                 f"{self.url}/rest/api/content/{page_id}",
                 auth=self.auth,
