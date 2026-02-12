@@ -744,6 +744,13 @@
           document.getElementById('vizEntities').textContent =
             `추출된 엔티티: ${data.entities_count}개`;
 
+          // Save to sessionStorage for entity viewer
+          sessionStorage.setItem('lastExtraction', JSON.stringify({
+            sources: sources,
+            profile: profile,
+            timestamp: Date.now()
+          }));
+
           // Load HTML into iframe
           const frame = document.getElementById('vizFrame');
           frame.srcdoc = data.html;
@@ -774,6 +781,19 @@
 
     // --- Entities Viewer ---
     function openEntitiesViewer() {
+      // Save current extraction context to sessionStorage
+      if (sources.length > 0) {
+        const useLangExtract = document.getElementById('useLangExtract').checked;
+        const profile = document.getElementById('extractProfile').value;
+
+        sessionStorage.setItem('lastExtraction', JSON.stringify({
+          sources: sources,
+          profile: profile,
+          useLangExtract: useLangExtract,
+          timestamp: Date.now()
+        }));
+      }
+
       window.open('/entities', '_blank');
     }
 

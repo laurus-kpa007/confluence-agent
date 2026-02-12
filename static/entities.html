@@ -797,6 +797,36 @@
       el.className = `status ${type} ${type ? 'show' : ''}`;
       el.innerHTML = msg;
     }
+
+    // Auto-load from sessionStorage on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      const lastExtraction = sessionStorage.getItem('lastExtraction');
+      if (lastExtraction) {
+        try {
+          const data = JSON.parse(lastExtraction);
+          const age = Date.now() - data.timestamp;
+
+          // Auto-load if less than 5 minutes old
+          if (age < 5 * 60 * 1000) {
+            sources = data.sources || [];
+            document.getElementById('profileSelect').value = data.profile || 'general';
+            updateSourceList();
+
+            // Show info banner
+            setStatus('loading', `📥 메인 UI에서 전달된 소스 ${sources.length}개를 자동으로 불러왔습니다. "엔티티 추출" 버튼을 클릭하세요.`);
+
+            // Auto-extract after 1 second
+            setTimeout(() => {
+              if (sources.length > 0) {
+                extractEntities();
+              }
+            }, 1000);
+          }
+        } catch (e) {
+          console.error('Failed to load last extraction:', e);
+        }
+      }
+    });
   </script>
 </body>
 </html>
