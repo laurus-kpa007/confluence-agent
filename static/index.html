@@ -351,7 +351,7 @@
         </div>
 
         <!-- Publish bar -->
-        <div class="publish-bar" style="flex-wrap:wrap;">
+        <div class="publish-bar publish-section" style="flex-wrap:wrap;">
           <input type="text" id="pageTitle" placeholder="페이지 제목" style="flex:1; min-width:200px;">
           <select id="spaceSelect" style="width:160px;" onchange="onSpaceChange()">
             <option value="">Space 선택...</option>
@@ -801,13 +801,28 @@
     async function loadSpaces() {
       try {
         const resp = await fetch('/api/confluence/spaces');
-        if (!resp.ok) return;
+        if (!resp.ok) {
+          // Hide Confluence publish section if not configured
+          const publishSection = document.querySelector('.publish-section');
+          if (publishSection) {
+            publishSection.style.display = 'none';
+          }
+          return;
+        }
         const spaces = await resp.json();
-        if (spaces.error) return;
+        if (spaces.error) {
+          const publishSection = document.querySelector('.publish-section');
+          if (publishSection) publishSection.style.display = 'none';
+          return;
+        }
         const sel = document.getElementById('spaceSelect');
         sel.innerHTML = '<option value="">Space 선택...</option>' +
           spaces.map(s => `<option value="${s.key}">${s.key} - ${s.name}</option>`).join('');
-      } catch(e) { /* Confluence not configured */ }
+      } catch(e) {
+        // Hide Confluence section on error
+        const publishSection = document.querySelector('.publish-section');
+        if (publishSection) publishSection.style.display = 'none';
+      }
     }
 
     async function onSpaceChange() {
