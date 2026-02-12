@@ -530,8 +530,17 @@
       background: var(--bg);
       border-radius: 12px;
       padding: 24px;
-      overflow-x: auto;
+      overflow: auto;
       min-height: 400px;
+      max-height: 80vh;
+      position: relative;
+    }
+
+    .diagram-wrapper {
+      display: inline-block;
+      min-width: 100%;
+      transform-origin: top left;
+      transition: transform 0.3s ease;
     }
 
     .diagram-container .mermaid {
@@ -539,6 +548,11 @@
       justify-content: center;
       align-items: center;
       min-height: 350px;
+    }
+
+    .diagram-container .mermaid svg {
+      max-width: none !important;
+      height: auto !important;
     }
 
     /* Loader */
@@ -662,11 +676,21 @@
         <label style="display: flex; align-items: center; gap: 6px;">
           <input type="checkbox" id="groupByType" checked onchange="updateDiagram()"> 타입별 그룹화
         </label>
+        <div style="flex: 1;"></div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 0.85em; color: var(--text2);">크기:</span>
+          <button class="btn btn-secondary" onclick="zoomDiagram(-0.2)" title="축소">🔍-</button>
+          <span id="zoomLevel" style="min-width: 60px; text-align: center; font-size: 0.9em;">100%</span>
+          <button class="btn btn-secondary" onclick="zoomDiagram(0.2)" title="확대">🔍+</button>
+          <button class="btn btn-secondary" onclick="resetZoom()" title="원래 크기">↺</button>
+        </div>
         <button class="btn btn-secondary" onclick="copyDiagramCode()">📋 Mermaid 코드 복사</button>
         <button class="btn btn-secondary" onclick="downloadDiagramSVG()">💾 SVG 저장</button>
       </div>
-      <div class="diagram-container">
-        <pre class="mermaid" id="mermaidDiagram"></pre>
+      <div class="diagram-container" id="diagramContainer">
+        <div class="diagram-wrapper" id="diagramWrapper">
+          <pre class="mermaid" id="mermaidDiagram"></pre>
+        </div>
       </div>
     </div>
   </div>
@@ -677,6 +701,7 @@
     let activeFilter = 'all';
     let currentView = 'cards';
     let mermaidCode = '';
+    let currentZoom = 1.0;
 
     // Entity type metadata
     const entityTypes = {
@@ -1092,6 +1117,10 @@
 
       try {
         await window.mermaid.run({ nodes: [container] });
+
+        // Reset zoom when diagram changes
+        currentZoom = 1.0;
+        applyZoom();
       } catch (e) {
         console.error('Mermaid rendering error:', e);
         container.innerHTML = `<div style="color: var(--warn); padding: 20px;">
@@ -1136,6 +1165,37 @@
         URL.revokeObjectURL(url);
       } catch (e) {
         alert('다운로드 실패: ' + e.message);
+      }
+    }
+
+    // Zoom controls
+    function zoomDiagram(delta) {
+      currentZoom = Math.max(0.2, Math.min(5.0, currentZoom + delta));
+      applyZoom();
+    }
+
+    function resetZoom() {
+      currentZoom = 1.0;
+      applyZoom();
+    }
+
+    function applyZoom() {
+      const wrapper = document.getElementById('diagramWrapper');
+      if (wrapper) {
+        wrapper.style.transform = `scale(${currentZoom})`;
+      }
+
+      // Update zoom level display
+      const zoomLabel = document.getElementById('zoomLevel');
+      if (zoomLabel) {
+        zoomLabel.textContent = `${Math.round(currentZoom * 100)}%`;
+      }
+
+      // Adjust container scroll if needed
+      const container = document.getElementById('diagramContainer');
+      if (container && currentZoom > 1) {
+        // Ensure scrollbars appear when zoomed in
+        container.style.overflow = 'auto';
       }
     }
 
