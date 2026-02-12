@@ -944,6 +944,23 @@
       }
     }
 
+    // Escape text for Mermaid
+    function escapeMermaid(text) {
+      return text
+        .replace(/"/g, '#quot;')  // Replace quotes with HTML entity
+        .replace(/\n/g, ' ')       // Remove newlines
+        .replace(/\r/g, '')        // Remove carriage returns
+        .replace(/\[/g, '#91;')    // Escape brackets
+        .replace(/\]/g, '#93;')
+        .replace(/\{/g, '#123;')   // Escape braces
+        .replace(/\}/g, '#125;')
+        .replace(/</g, '#lt;')     // Escape angle brackets
+        .replace(/>/g, '#gt;')
+        .replace(/&/g, '#amp;')    // Escape ampersand
+        .replace(/\|/g, '#124;')   // Escape pipe
+        .trim();
+    }
+
     // Generate Mermaid diagram
     function generateDiagram() {
       const showRelations = document.getElementById('showRelations')?.checked ?? true;
@@ -973,7 +990,7 @@
 
         entities.forEach(e => {
           const content = e.content.length > 40 ? e.content.substring(0, 40) + '...' : e.content;
-          const escaped = content.replace(/"/g, '\\"').replace(/\n/g, ' ');
+          const escaped = escapeMermaid(content);
           code += `    ${e.id}["${escaped}"]\n`;
         });
 
@@ -1011,7 +1028,7 @@
       allEntities.forEach((e, idx) => {
         const meta = entityTypes[e.type] || { icon: '📄' };
         const content = e.content.length > 30 ? e.content.substring(0, 30) + '...' : e.content;
-        const escaped = content.replace(/"/g, '\\"').replace(/\n/g, ' ');
+        const escaped = escapeMermaid(content);
         code += `  E${idx}["${meta.icon} ${escaped}"]\n`;
       });
 
