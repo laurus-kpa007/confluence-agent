@@ -133,9 +133,14 @@ class WebUI:
             })
         except Exception as e:
             import traceback
+            error_msg = str(e) if str(e) else f"{type(e).__name__}: (no message)"
+            tb = traceback.format_exc()
+            print(f"❌ Process error: {error_msg}")
+            print(tb)
             return web.json_response({
-                "error": str(e),
-                "traceback": traceback.format_exc(),
+                "error": error_msg,
+                "error_type": type(e).__name__,
+                "traceback": tb,
             }, status=500)
 
     async def _publish(self, request):

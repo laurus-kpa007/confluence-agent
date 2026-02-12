@@ -68,9 +68,10 @@ class LLMProcessor:
         if use_langextract:
             try:
                 extractor = self._get_extractor()
-                # Extract from combined text (truncated for speed)
+                # Extract from combined text (truncated for stability and speed)
+                # Limit to 5000 chars to avoid JSON parsing issues
                 result = await extractor.extract(
-                    combined[:20000],
+                    combined[:5000],
                     profile=extraction_profile,
                 )
                 extraction_context = extractor.format_entities_as_context(result)
@@ -107,7 +108,8 @@ class LLMProcessor:
     async def _call_ollama(self, prompt: str) -> str:
         url = f"{self.base_url}/v1/chat/completions"
         logger.debug("Calling Ollama: %s model=%s prompt_len=%d", url, self.model, len(prompt))
-        async with httpx.AsyncClient(timeout=120.0, verify=self.ssl_verify) as client:
+        # Increased timeout to 300s (5 min) for LangExtract processing
+        async with httpx.AsyncClient(timeout=300.0, verify=self.ssl_verify) as client:
             resp = await client.post(
                 url,
                 json={
@@ -125,7 +127,8 @@ class LLMProcessor:
 
     async def _call_anthropic(self, prompt: str) -> str:
         logger.debug("Calling Anthropic: model=%s prompt_len=%d", self.model, len(prompt))
-        async with httpx.AsyncClient(timeout=120.0, verify=self.ssl_verify) as client:
+        # Increased timeout to 300s (5 min) for complex processing
+        async with httpx.AsyncClient(timeout=300.0, verify=self.ssl_verify) as client:
             resp = await client.post(
                 "https://api.anthropic.com/v1/messages",
                 headers={
