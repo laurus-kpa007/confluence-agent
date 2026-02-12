@@ -61,11 +61,16 @@ class WebSearchAdapter(BaseAdapter):
         )
 
     async def _search(self, query: str) -> List[str]:
-        """Search using configured provider. Priority: google > brave > duckduckgo."""
+        """Search using configured provider. Falls back to DuckDuckGo if API key missing."""
         if self.provider == "google" and self.api_key:
+            logger.debug("Using Google search (api_key set)")
             return await self._google_search(query)
         elif self.provider == "brave" and self.api_key:
+            logger.debug("Using Brave search (api_key set)")
             return await self._brave_search(query)
+
+        if self.provider != "duckduckgo":
+            logger.warning("Provider '%s' configured but api_key is empty, falling back to DuckDuckGo", self.provider)
         return await self._ddg_search(query)
 
     async def _google_search(self, query: str) -> List[str]:
@@ -101,8 +106,18 @@ class WebSearchAdapter(BaseAdapter):
         """Fallback: DuckDuckGo (no API key needed)."""
         try:
             from duckduckgo_search import DDGS
-            with DDGS(verify=self.ssl_verify) as ddgs:
-                results = list(ddgs.text(query, max_results=self.max_results))
-                return [r["href"] for r in results]
         except ImportError:
             raise ImportError("pip install duckduckgo-search (or set search API key)")
+
+        try:
+            logger.debug("DuckDuckGo search: query='%s', ssl_verify=%s", query, self.ssl_verify)
+            with DDGS(verify=self.ssl_verify) as ddgs:
+                results = list(ddgs.text(query, max_results=self.max_results))
+                logger.debug("DuckDuckGo returned %d results", len(results))
+                return [r["href"] for r in results]
+        except Exception as e:
+            logger.error("DuckDuckGo search failed: %s", e)
+            raise ConnectionError(
+                f"검색 실패: {e}\n"
+                f"해결 방법: config.yaml에서 Google/Brave API 키를 설정하거나, 네트워크 연결을 확인하세요."
+            )
