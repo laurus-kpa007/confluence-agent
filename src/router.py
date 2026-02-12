@@ -28,7 +28,8 @@ class SourceRouter:
                 logger.debug("Registering %s with config: %s", cls.__name__, search_config)
                 adapter = cls(**search_config)
             elif cls == WebAdapter:
-                adapter = cls(ssl_verify=ssl_verify)
+                proxy = search_config.get("proxy", "") if search_config else ""
+                adapter = cls(ssl_verify=ssl_verify, proxy=proxy)
             else:
                 adapter = cls()
             self._adapters.append(adapter)

@@ -26,7 +26,7 @@ class WebSearchAdapter(BaseAdapter):
         self.max_results = max_results
         self.ssl_verify = ssl_verify
         self.proxy = proxy or os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or None
-        self._scraper = WebAdapter(ssl_verify=ssl_verify)
+        self._scraper = WebAdapter(ssl_verify=ssl_verify, proxy=self.proxy)
         logger.debug("WebSearchAdapter init: provider=%s, max_results=%d, ssl_verify=%s, proxy=%s",
                       provider, max_results, ssl_verify, self.proxy)
 
@@ -54,7 +54,14 @@ class WebSearchAdapter(BaseAdapter):
                 continue
 
         if not texts:
-            raise ValueError(f"No results found for: {query}")
+            logger.warning("No results found for query: %s", query)
+            return SourceContent(
+                text=f"검색 결과를 찾을 수 없습니다: {query}",
+                title=f"검색: {query} (결과 없음)",
+                source_url=f"search:{query}",
+                source_type="web_search",
+                metadata={"query": query, "results_count": 0},
+            )
 
         return SourceContent(
             text="\n\n---\n\n".join(texts),
