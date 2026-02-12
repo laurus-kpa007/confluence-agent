@@ -1,12 +1,15 @@
 """CLI entrypoint for Confluence Knowledge Agent."""
 import asyncio
 import argparse
+import logging
 from pathlib import Path
 
 from .router import SourceRouter
 from .processor import LLMProcessor
 from .publisher import ConfluencePublisher
 from .config_loader import load_config as load_config_with_env, get_search_config, get_ssl_verify
+
+logger = logging.getLogger(__name__)
 
 # Optional MCP adapters
 from .adapters.gdrive import GDriveAdapter
@@ -44,6 +47,8 @@ async def run(args):
     config = load_config()
     ssl_verify = get_ssl_verify(config)
 
+    logger.debug("Config loaded: llm.provider=%s, ssl_verify=%s", config.get("llm", {}).get("provider"), ssl_verify)
+
     # Build components
     router = build_router(config)
 
@@ -57,17 +62,17 @@ async def run(args):
     )
 
     # 1. Extract from all sources
-    print(f"📥 Extracting from {len(args.sources)} source(s)...")
+    logger.info("Extracting from %d source(s)...", len(args.sources))
     contents = await router.extract_many(args.sources)
     for c in contents:
-        print(f"  ✅ [{c.source_type}] {c.title} ({len(c.text)} chars)")
+        logger.info("  [%s] %s (%d chars)", c.source_type, c.title, len(c.text))
 
     # 2. Process with LLM
     template = args.template or config.get("templates", {}).get("default", "summary")
     output_length = getattr(args, 'length', 'normal')
-    print(f"🤖 Processing with {processor.model} (template: {template}, length: {output_length})...")
+    logger.info("Processing with %s (template: %s, length: %s)...", processor.model, template, output_length)
     body = await processor.process(contents, template=template, output_length=output_length)
-    print(f"  ✅ Generated {len(body)} chars")
+    logger.info("  Generated %d chars", len(body))
 
     # 3. Publish to Confluence (if configured)
     conf_cfg = config.get("confluence", {})
@@ -81,18 +86,18 @@ async def run(args):
         space = args.space or conf_cfg.get("default_space", "TEAM")
         title = args.title or contents[0].title
 
-        print(f"📤 Publishing to Confluence [{space}]...")
+        logger.info("Publishing to Confluence [%s]...", space)
         result = await publisher.create_page(
             title=title,
             body=body,
             space_key=space,
             parent_id=args.parent_id,
         )
-        print(f"  ✅ Created: {result['url']}")
+        logger.info("  Created: %s", result['url'])
     else:
         # Dry run - just print output
         print("\n" + "=" * 60)
-        print("📄 Generated Content (dry-run):")
+        print("Generated Content (dry-run):")
         print("=" * 60)
         print(body)
 
@@ -122,7 +127,18 @@ def main():
     ui.add_argument("--port", type=int, default=8501)
     ui.add_argument("--config", "-c", help="Config file path")
 
+    # Global verbose flag
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enable detailed debug logging")
+
     args = parser.parse_args()
+
+    # Configure logging
+    log_level = logging.DEBUG if getattr(args, 'verbose', False) else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
 
     if args.command == "ui":
         if getattr(args, 'config', None):

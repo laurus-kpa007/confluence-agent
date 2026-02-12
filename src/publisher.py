@@ -1,6 +1,9 @@
 """Confluence publisher - creates/updates pages via REST API."""
+import logging
 from typing import Optional, List
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 class ConfluencePublisher:
@@ -10,6 +13,7 @@ class ConfluencePublisher:
         self.url = url.rstrip("/")
         self.auth = (username, api_token)
         self.ssl_verify = ssl_verify
+        logger.debug("ConfluencePublisher init: url=%s, username=%s, ssl_verify=%s", self.url, username, ssl_verify)
 
     async def list_spaces(self, limit: int = 50) -> List[dict]:
         """List all accessible spaces."""
@@ -120,6 +124,7 @@ class ConfluencePublisher:
         if parent_id:
             payload["ancestors"] = [{"id": parent_id}]
 
+        logger.debug("Creating page: title=%s, space=%s, parent_id=%s", title, space_key, parent_id)
         async with httpx.AsyncClient(timeout=30.0, verify=self.ssl_verify) as client:
             resp = await client.post(
                 f"{self.url}/rest/api/content",
@@ -127,8 +132,10 @@ class ConfluencePublisher:
                 auth=self.auth,
                 headers={"Content-Type": "application/json"},
             )
+            logger.debug("Create page response: status=%d", resp.status_code)
             resp.raise_for_status()
             result = resp.json()
+            logger.info("Page created: id=%s, title=%s", result["id"], result["title"])
             return {
                 "id": result["id"],
                 "title": result["title"],
@@ -142,6 +149,7 @@ class ConfluencePublisher:
         body: str,
     ) -> dict:
         """Update an existing Confluence page."""
+        logger.debug("Updating page: id=%s, title=%s", page_id, title)
         # Get current version
         async with httpx.AsyncClient(timeout=30.0, verify=self.ssl_verify) as client:
             resp = await client.get(

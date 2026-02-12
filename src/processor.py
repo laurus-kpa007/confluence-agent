@@ -1,10 +1,13 @@
 """LLM processor - takes extracted content and generates Confluence-formatted output."""
+import logging
 from typing import List, Optional
 import httpx
 
 from .adapters.base import SourceContent
 from .templates import TemplateManager
 from .extractor import StructuredExtractor
+
+logger = logging.getLogger(__name__)
 
 
 class LLMProcessor:
@@ -25,6 +28,7 @@ class LLMProcessor:
         self.ssl_verify = ssl_verify
         self.templates = TemplateManager()
         self.extractor = None  # Lazy init
+        logger.debug("LLMProcessor init: provider=%s, model=%s, base_url=%s, ssl_verify=%s", provider, model, base_url, ssl_verify)
 
     def _get_extractor(self) -> StructuredExtractor:
         if not self.extractor:
@@ -53,8 +57,11 @@ class LLMProcessor:
             output_length: Output length - "compact", "normal", "detailed", "comprehensive"
         """
 
+        logger.info("Processing %d source(s), template=%s, length=%s", len(contents), template, output_length)
+
         # Combine all source contents
         combined = self._combine_contents(contents)
+        logger.debug("Combined content length: %d chars", len(combined))
 
         # Optional: structured extraction with LangExtract
         extraction_context = ""
@@ -98,9 +105,11 @@ class LLMProcessor:
             raise ValueError(f"Unknown provider: {self.provider}")
 
     async def _call_ollama(self, prompt: str) -> str:
+        url = f"{self.base_url}/v1/chat/completions"
+        logger.debug("Calling Ollama: %s model=%s prompt_len=%d", url, self.model, len(prompt))
         async with httpx.AsyncClient(timeout=120.0, verify=self.ssl_verify) as client:
             resp = await client.post(
-                f"{self.base_url}/v1/chat/completions",
+                url,
                 json={
                     "model": self.model,
                     "messages": [{"role": "user", "content": prompt}],
@@ -108,10 +117,14 @@ class LLMProcessor:
                     "temperature": 0.3,
                 },
             )
+            logger.debug("Ollama response: status=%d", resp.status_code)
             resp.raise_for_status()
-            return resp.json()["choices"][0]["message"]["content"]
+            result = resp.json()["choices"][0]["message"]["content"]
+            logger.debug("Ollama result length: %d chars", len(result))
+            return result
 
     async def _call_anthropic(self, prompt: str) -> str:
+        logger.debug("Calling Anthropic: model=%s prompt_len=%d", self.model, len(prompt))
         async with httpx.AsyncClient(timeout=120.0, verify=self.ssl_verify) as client:
             resp = await client.post(
                 "https://api.anthropic.com/v1/messages",
@@ -126,5 +139,8 @@ class LLMProcessor:
                     "messages": [{"role": "user", "content": prompt}],
                 },
             )
+            logger.debug("Anthropic response: status=%d", resp.status_code)
             resp.raise_for_status()
-            return resp.json()["content"][0]["text"]
+            result = resp.json()["content"][0]["text"]
+            logger.debug("Anthropic result length: %d chars", len(result))
+            return result

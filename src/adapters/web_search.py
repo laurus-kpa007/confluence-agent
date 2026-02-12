@@ -1,12 +1,15 @@
-"""Web search + scrape adapter. 
+"""Web search + scrape adapter.
 
 Searches the web for a query, then scrapes top results.
 Input format: "search:검색어" or "search:AI agent framework"
 """
+import logging
 import re
 from typing import List
 from .base import BaseAdapter, SourceContent
 from .web import WebAdapter
+
+logger = logging.getLogger(__name__)
 
 
 class WebSearchAdapter(BaseAdapter):
@@ -21,23 +24,29 @@ class WebSearchAdapter(BaseAdapter):
         self.max_results = max_results
         self.ssl_verify = ssl_verify
         self._scraper = WebAdapter(ssl_verify=ssl_verify)
+        logger.debug("WebSearchAdapter init: provider=%s, max_results=%d, ssl_verify=%s", provider, max_results, ssl_verify)
 
     def can_handle(self, source: str) -> bool:
         return source.lower().startswith(self._PREFIX)
 
     async def extract(self, source: str) -> SourceContent:
         query = source[len(self._PREFIX):].strip()
+        logger.info("Web search: query='%s', provider=%s", query, self.provider)
 
         # 1. Search
         urls = await self._search(query)
+        logger.debug("Search returned %d URLs: %s", len(urls), urls)
 
         # 2. Scrape top results
         texts = []
         for url in urls[:self.max_results]:
             try:
+                logger.debug("Scraping URL: %s", url)
                 content = await self._scraper.extract(url)
                 texts.append(f"[{content.title}]\n{content.source_url}\n{content.text[:3000]}")
-            except Exception:
+                logger.debug("Scraped %d chars from %s", len(content.text), url)
+            except Exception as e:
+                logger.warning("Failed to scrape %s: %s", url, e)
                 continue
 
         if not texts:

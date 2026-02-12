@@ -1,6 +1,9 @@
 """Web URL scraper adapter."""
+import logging
 import re
 from .base import BaseAdapter, SourceContent
+
+logger = logging.getLogger(__name__)
 
 
 class WebAdapter(BaseAdapter):
@@ -23,13 +26,17 @@ class WebAdapter(BaseAdapter):
         except ImportError:
             raise ImportError("pip install trafilatura")
 
+        logger.debug("Fetching URL: %s (ssl_verify=%s)", source, self.ssl_verify)
         downloaded = fetch_url(source, no_ssl=not self.ssl_verify)
         if not downloaded:
+            logger.error("Failed to fetch URL: %s", source)
             raise ValueError(f"Failed to fetch: {source}")
 
         text = extract(downloaded, include_comments=False, include_tables=True)
         if not text:
+            logger.warning("No content extracted from: %s", source)
             raise ValueError(f"No content extracted from: {source}")
+        logger.debug("Extracted %d chars from %s", len(text), source)
 
         # Try to get title
         from trafilatura.metadata import extract_metadata
