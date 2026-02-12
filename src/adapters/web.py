@@ -9,6 +9,9 @@ class WebAdapter(BaseAdapter):
     # Exclude youtube, drive, sharepoint URLs
     _EXCLUDE = re.compile(r"(youtube\.com|youtu\.be|drive\.google|sharepoint|onedrive)")
 
+    def __init__(self, ssl_verify: bool = True):
+        self.ssl_verify = ssl_verify
+
     def can_handle(self, source: str) -> bool:
         if not source.startswith(("http://", "https://")):
             return False
@@ -20,7 +23,7 @@ class WebAdapter(BaseAdapter):
         except ImportError:
             raise ImportError("pip install trafilatura")
 
-        downloaded = fetch_url(source)
+        downloaded = fetch_url(source, no_ssl=not self.ssl_verify)
         if not downloaded:
             raise ValueError(f"Failed to fetch: {source}")
 

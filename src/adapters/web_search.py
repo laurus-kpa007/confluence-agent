@@ -20,7 +20,7 @@ class WebSearchAdapter(BaseAdapter):
         self.cx_id = cx_id  # Google Custom Search Engine ID
         self.max_results = max_results
         self.ssl_verify = ssl_verify
-        self._scraper = WebAdapter()
+        self._scraper = WebAdapter(ssl_verify=ssl_verify)
 
     def can_handle(self, source: str) -> bool:
         return source.lower().startswith(self._PREFIX)
@@ -92,7 +92,7 @@ class WebSearchAdapter(BaseAdapter):
         """Fallback: DuckDuckGo (no API key needed)."""
         try:
             from duckduckgo_search import DDGS
-            with DDGS() as ddgs:
+            with DDGS(verify=self.ssl_verify) as ddgs:
                 results = list(ddgs.text(query, max_results=self.max_results))
                 return [r["href"] for r in results]
         except ImportError:

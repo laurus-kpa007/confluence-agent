@@ -2,6 +2,7 @@
 from typing import List, Optional, Dict
 from .adapters.base import BaseAdapter, SourceContent
 from .adapters import BUILTIN_ADAPTERS
+from .adapters.web import WebAdapter
 from .adapters.web_search import WebSearchAdapter
 
 
@@ -14,12 +15,15 @@ class SourceRouter:
         search_config: Optional[Dict] = None,
     ):
         self._adapters: List[BaseAdapter] = []
+        ssl_verify = search_config.get("ssl_verify", True) if search_config else True
 
         # Register built-in adapters with config
         for cls in BUILTIN_ADAPTERS:
             if cls == WebSearchAdapter and search_config:
                 # Inject search config into WebSearchAdapter
                 adapter = cls(**search_config)
+            elif cls == WebAdapter:
+                adapter = cls(ssl_verify=ssl_verify)
             else:
                 adapter = cls()
             self._adapters.append(adapter)
