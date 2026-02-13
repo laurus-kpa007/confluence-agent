@@ -6,17 +6,24 @@ from pathlib import Path
 from typing import Any, Dict
 
 
+def _strip_quotes(value: str) -> str:
+    """Strip surrounding quotes from a value (single or double)."""
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+        return value[1:-1]
+    return value
+
+
 def load_env_file(env_path: Path = Path(".env")) -> Dict[str, str]:
     """Load environment variables from .env file."""
     env_vars = {}
     if env_path.exists():
-        with open(env_path, 'r', encoding='utf-8') as f:
+        with open(env_path, 'r', encoding='utf-8-sig') as f:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith('#'):
                     if '=' in line:
                         key, value = line.split('=', 1)
-                        env_vars[key.strip()] = value.strip()
+                        env_vars[key.strip()] = _strip_quotes(value.strip())
     return env_vars
 
 

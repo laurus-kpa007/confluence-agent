@@ -868,29 +868,37 @@
 
     // --- Confluence Space/Page ---
     async function loadSpaces() {
+      const publishSection = document.querySelector('.publish-section');
       try {
         const resp = await fetch('/api/confluence/spaces');
         if (!resp.ok) {
-          // Hide Confluence publish section if not configured
-          const publishSection = document.querySelector('.publish-section');
-          if (publishSection) {
-            publishSection.style.display = 'none';
+          const errData = await resp.json().catch(() => ({}));
+          if (resp.status === 400) {
+            // Confluence not configured at all - hide section
+            if (publishSection) publishSection.style.display = 'none';
+          } else {
+            // Configured but connection error (SSL, auth, network) - show error
+            const errMsg = errData.error || `HTTP ${resp.status}`;
+            const sel = document.getElementById('spaceSelect');
+            sel.innerHTML = `<option value="">⚠ 연결 오류: ${errMsg}</option>`;
+            console.error('Confluence spaces error:', errMsg);
           }
           return;
         }
         const spaces = await resp.json();
         if (spaces.error) {
-          const publishSection = document.querySelector('.publish-section');
-          if (publishSection) publishSection.style.display = 'none';
+          const sel = document.getElementById('spaceSelect');
+          sel.innerHTML = `<option value="">⚠ ${spaces.error}</option>`;
           return;
         }
         const sel = document.getElementById('spaceSelect');
         sel.innerHTML = '<option value="">Space 선택...</option>' +
           spaces.map(s => `<option value="${s.key}">${s.key} - ${s.name}</option>`).join('');
       } catch(e) {
-        // Hide Confluence section on error
-        const publishSection = document.querySelector('.publish-section');
-        if (publishSection) publishSection.style.display = 'none';
+        // Network error - show message instead of hiding
+        const sel = document.getElementById('spaceSelect');
+        if (sel) sel.innerHTML = `<option value="">⚠ 네트워크 오류</option>`;
+        console.error('Confluence loadSpaces error:', e);
       }
     }
 
