@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from aiohttp import web
+import httpx
 
 from .router import SourceRouter
 from .processor import LLMProcessor
@@ -24,11 +25,20 @@ class WebUI:
 
         conf_cfg = config.get("confluence", {})
         self.publisher = None
-        if conf_cfg.get("url"):
+        conf_url = conf_cfg.get("url", "").strip()
+        conf_username = conf_cfg.get("username", "").strip()
+        conf_token = conf_cfg.get("api_token", "").strip()
+        if conf_url:
+            if not conf_username or not conf_token:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Confluence URL is set but username or api_token is empty. "
+                    "Check .env file (CONFLUENCE_USERNAME, CONFLUENCE_API_TOKEN)."
+                )
             self.publisher = ConfluencePublisher(
-                url=conf_cfg["url"],
-                username=conf_cfg["username"],
-                api_token=conf_cfg["api_token"],
+                url=conf_url,
+                username=conf_username,
+                api_token=conf_token,
                 ssl_verify=get_ssl_verify(config),
             )
 
@@ -324,8 +334,16 @@ class WebUI:
         try:
             spaces = await self.publisher.list_spaces()
             return web.json_response(spaces)
+        except httpx.ConnectError as e:
+            return web.json_response({"error": f"Confluence 연결 실패 - URL을 확인하세요: {e}"}, status=500)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 401:
+                return web.json_response({"error": "인증 실패 - username/api_token을 확인하세요"}, status=500)
+            elif e.response.status_code == 403:
+                return web.json_response({"error": "권한 없음 - API 토큰 권한을 확인하세요"}, status=500)
+            return web.json_response({"error": f"Confluence API 오류 (HTTP {e.response.status_code})"}, status=500)
         except Exception as e:
-            return web.json_response({"error": str(e)}, status=500)
+            return web.json_response({"error": f"Confluence 오류: {e}"}, status=500)
 
     async def _list_pages(self, request):
         if not self.publisher:
