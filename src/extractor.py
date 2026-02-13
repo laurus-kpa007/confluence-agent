@@ -172,8 +172,8 @@ class StructuredExtractor:
         except Exception as e:
             error_msg = str(e)
 
-            # Try fallback with fence_output=False if it was a JSON parsing error
-            if "JSON" in error_msg or "parse" in error_msg.lower():
+            # Try fallback with fence_output=False if it was a JSON/format parsing error
+            if "JSON" in error_msg or "parse" in error_msg.lower() or "extractions" in error_msg.lower():
                 try:
                     print(f"⚠️  JSON 파싱 오류 발생, fence_output=False로 재시도...")
                     kwargs["fence_output"] = False
@@ -234,12 +234,13 @@ class StructuredExtractor:
             ]
             examples.append(lx.data.ExampleData(text=ex["text"], extractions=extractions))
 
+        max_chars = 10000
         kwargs = {
-            "text_or_documents": text[:50000],
+            "text_or_documents": text[:max_chars],
             "prompt_description": prof["prompt"],
             "examples": examples,
             "model_id": self.model_id,
-            "fence_output": False,
+            "fence_output": True,
             "use_schema_constraints": False,
         }
         if self.model_url and not self.api_key:
@@ -247,7 +248,17 @@ class StructuredExtractor:
         elif self.api_key:
             kwargs["api_key"] = self.api_key
 
-        result = lx.extract(**kwargs)
+        try:
+            result = lx.extract(**kwargs)
+        except Exception as e:
+            error_msg = str(e)
+            if "JSON" in error_msg or "parse" in error_msg.lower() or "extractions" in error_msg.lower():
+                print(f"⚠️  시각화 추출 오류, fence_output=False로 재시도...")
+                kwargs["fence_output"] = False
+                kwargs["text_or_documents"] = text[:5000]
+                result = lx.extract(**kwargs)
+            else:
+                raise
 
         # Save to JSONL for visualization
         jsonl_path = str(Path(output_dir) / "extraction_results.jsonl")
