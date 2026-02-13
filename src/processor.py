@@ -32,9 +32,9 @@ class LLMProcessor:
 
     def _get_extractor(self) -> StructuredExtractor:
         if not self.extractor:
-            # Use smaller model for extraction (faster)
+            # Use same model as main LLM for consistency and speed
             self.extractor = StructuredExtractor(
-                model_id="gemma2:2b",
+                model_id=self.model,  # Use main model (e.g., gemma3:4b)
                 model_url=self.base_url if self.provider == "ollama" else None,
                 api_key=self.api_key if self.provider != "ollama" else None,
             )
@@ -48,6 +48,7 @@ class LLMProcessor:
         use_langextract: bool = False,
         extraction_profile: str = "general",
         output_length: str = "normal",
+        output_language: str = "ko",
     ) -> str:
         """Generate formatted content from extracted sources.
 
@@ -55,9 +56,10 @@ class LLMProcessor:
             use_langextract: If True, run LangExtract for structured extraction first
             extraction_profile: LangExtract profile (meeting, tech_review, research, general)
             output_length: Output length - "compact", "normal", "detailed", "comprehensive"
+            output_language: Output language code - "ko", "en", "ja", "zh"
         """
 
-        logger.info("Processing %d source(s), template=%s, length=%s", len(contents), template, output_length)
+        logger.info("Processing %d source(s), template=%s, length=%s, language=%s", len(contents), template, output_length, output_language)
 
         # Combine all source contents
         combined = self._combine_contents(contents)
@@ -68,9 +70,10 @@ class LLMProcessor:
         if use_langextract:
             try:
                 extractor = self._get_extractor()
-                # Extract from combined text (truncated for speed)
+                # Extract from combined text (truncated for stability and speed)
+                # Limit to 5000 chars to avoid JSON parsing issues
                 result = await extractor.extract(
-                    combined[:20000],
+                    combined[:5000],
                     profile=extraction_profile,
                 )
                 extraction_context = extractor.format_entities_as_context(result)
@@ -81,7 +84,7 @@ class LLMProcessor:
                 extraction_context = f"\n[LangExtract 추출 실패: {e}]\n"
 
         # Render template with content and format instructions
-        prompt = self.templates.render(template, combined, output_format, output_length)
+        prompt = self.templates.render(template, combined, output_format, output_length, output_language)
 
         # Call LLM
         response = await self._call_llm(prompt)
@@ -107,7 +110,8 @@ class LLMProcessor:
     async def _call_ollama(self, prompt: str) -> str:
         url = f"{self.base_url}/v1/chat/completions"
         logger.debug("Calling Ollama: %s model=%s prompt_len=%d", url, self.model, len(prompt))
-        async with httpx.AsyncClient(timeout=120.0, verify=self.ssl_verify) as client:
+        # Increased timeout to 300s (5 min) for LangExtract processing
+        async with httpx.AsyncClient(timeout=300.0, verify=self.ssl_verify) as client:
             resp = await client.post(
                 url,
                 json={
@@ -125,7 +129,8 @@ class LLMProcessor:
 
     async def _call_anthropic(self, prompt: str) -> str:
         logger.debug("Calling Anthropic: model=%s prompt_len=%d", self.model, len(prompt))
-        async with httpx.AsyncClient(timeout=120.0, verify=self.ssl_verify) as client:
+        # Increased timeout to 300s (5 min) for complex processing
+        async with httpx.AsyncClient(timeout=300.0, verify=self.ssl_verify) as client:
             resp = await client.post(
                 "https://api.anthropic.com/v1/messages",
                 headers={

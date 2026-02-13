@@ -158,7 +158,7 @@ class TemplateManager:
         if path.exists():
             path.unlink()
 
-    def render(self, name: str, content: str, output_format: str = "markdown", length: str = "normal") -> str:
+    def render(self, name: str, content: str, output_format: str = "markdown", length: str = "normal", language: str = "ko") -> str:
         """Render template with content and format instructions.
 
         Args:
@@ -166,20 +166,53 @@ class TemplateManager:
             content: Source content
             output_format: markdown or confluence
             length: Output length - "compact", "normal", "detailed", "comprehensive"
+            language: Output language code - "ko", "en", "ja", "zh"
         """
         template = self.get_template(name)
         fmt = FORMAT_INSTRUCTIONS.get(output_format, FORMAT_INSTRUCTIONS["markdown"])
 
-        # Add length instructions
+        # Add length instructions with specific guidance
         length_instructions = {
-            "compact": "간결하게 핵심만 요약 (현재 분량의 50%)",
-            "normal": "적당한 분량으로 정리 (기본)",
-            "detailed": "상세하게 정리 (현재 분량의 2배, 더 많은 예시와 설명 포함)",
-            "comprehensive": "매우 상세하게 정리 (현재 분량의 3배, 모든 세부사항 포함)",
+            "compact": """
+**출력 길이: 간결 (50%)**
+- 핵심 요약만 3-5문단 이내
+- 세부 설명 최소화
+- 예시 1-2개만 포함
+- 목표: 500-1000자""",
+            "normal": """
+**출력 길이: 보통 (100%)**
+- 주요 내용을 적당히 정리
+- 필요한 설명 포함
+- 예시 2-3개 포함
+- 목표: 1000-2000자""",
+            "detailed": """
+**출력 길이: 상세 (200%)**
+- 모든 주요 내용 상세 설명
+- 배경 정보와 컨텍스트 포함
+- 예시 5개 이상 포함
+- 각 섹션마다 충분한 설명
+- 목표: 2000-4000자""",
+            "comprehensive": """
+**출력 길이: 매우 상세 (300%)**
+- 모든 세부사항 완전히 설명
+- 배경, 컨텍스트, 의미 모두 포함
+- 가능한 모든 예시 포함
+- 각 개념마다 심층 설명
+- 관련 정보 모두 추가
+- 목표: 4000-6000자 이상""",
         }
         length_inst = length_instructions.get(length, length_instructions["normal"])
 
-        # Combine format and length instructions
-        combined_instructions = f"{fmt}\n길이: {length_inst}"
+        # Add language instructions
+        language_instructions = {
+            "ko": "**출력 언어: 한국어로 작성하세요.**",
+            "en": "**Output Language: Write in English.**",
+            "ja": "**出力言語: 日本語で書いてください。**",
+            "zh": "**输出语言：请用中文写。**",
+        }
+        language_inst = language_instructions.get(language, language_instructions["ko"])
+
+        # Combine format, length, and language instructions
+        combined_instructions = f"{fmt}\n길이: {length_inst}\n{language_inst}"
 
         return template.format(content=content, format_instructions=combined_instructions)

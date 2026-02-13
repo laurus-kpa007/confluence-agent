@@ -464,6 +464,97 @@
       font-size: 0.95em;
     }
 
+    /* View Tabs */
+    .view-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      padding: 4px;
+      background: var(--surface);
+      border-radius: 12px;
+      width: fit-content;
+    }
+
+    .view-tab {
+      padding: 10px 20px;
+      background: transparent;
+      border: none;
+      border-radius: 8px;
+      color: var(--text2);
+      font-size: 0.95em;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .view-tab:hover {
+      background: var(--surface2);
+      color: var(--text);
+    }
+
+    .view-tab.active {
+      background: var(--accent);
+      color: white;
+    }
+
+    /* Diagram View */
+    .diagram-view {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 24px;
+      margin-top: 20px;
+    }
+
+    .diagram-controls {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--surface2);
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .diagram-controls label {
+      font-size: 0.9em;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .diagram-controls input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    .diagram-container {
+      background: var(--bg);
+      border-radius: 12px;
+      padding: 24px;
+      overflow: auto;
+      min-height: 400px;
+      max-height: 80vh;
+      position: relative;
+    }
+
+    .diagram-wrapper {
+      display: inline-block;
+      min-width: 100%;
+      transform-origin: top left;
+      transition: transform 0.3s ease;
+    }
+
+    .diagram-container .mermaid {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 350px;
+    }
+
+    .diagram-container .mermaid svg {
+      max-width: none !important;
+      height: auto !important;
+    }
+
     /* Loader */
     .loader {
       border: 3px solid var(--surface2);
@@ -495,6 +586,27 @@
       }
     }
   </style>
+  <!-- Mermaid JS for diagram rendering -->
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'dark',
+      themeVariables: {
+        primaryColor: '#8b5cf6',
+        primaryTextColor: '#e8e8f0',
+        primaryBorderColor: '#a78bfa',
+        lineColor: '#60a5fa',
+        secondaryColor: '#1a1a2e',
+        tertiaryColor: '#25254a',
+        background: '#0a0a0f',
+        mainBkg: '#1a1a2e',
+        textColor: '#e8e8f0',
+        fontSize: '14px'
+      }
+    });
+    window.mermaid = mermaid;
+  </script>
 </head>
 <body>
   <div class="container">
@@ -540,6 +652,12 @@
     <!-- Filter Chips -->
     <div class="filter-chips" id="filterChips" style="display: none;"></div>
 
+    <!-- View Tabs -->
+    <div class="view-tabs" id="viewTabs" style="display: none;">
+      <button class="view-tab active" onclick="switchView('cards')">📇 카드 뷰</button>
+      <button class="view-tab" onclick="switchView('diagram')">📊 관계 다이어그램</button>
+    </div>
+
     <!-- Entities Grid -->
     <div class="entities-grid" id="entitiesGrid">
       <div class="empty-state">
@@ -548,12 +666,42 @@
         <p>소스를 추가하고 엔티티 추출을 실행해보세요</p>
       </div>
     </div>
+
+    <!-- Diagram View -->
+    <div class="diagram-view" id="diagramView" style="display: none;">
+      <div class="diagram-controls">
+        <label style="display: flex; align-items: center; gap: 6px;">
+          <input type="checkbox" id="showRelations" checked onchange="updateDiagram()"> 관계 표시
+        </label>
+        <label style="display: flex; align-items: center; gap: 6px;">
+          <input type="checkbox" id="groupByType" checked onchange="updateDiagram()"> 타입별 그룹화
+        </label>
+        <div style="flex: 1;"></div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 0.85em; color: var(--text2);">크기:</span>
+          <button class="btn btn-secondary" onclick="zoomDiagram(-0.2)" title="축소">🔍-</button>
+          <span id="zoomLevel" style="min-width: 60px; text-align: center; font-size: 0.9em;">100%</span>
+          <button class="btn btn-secondary" onclick="zoomDiagram(0.2)" title="확대">🔍+</button>
+          <button class="btn btn-secondary" onclick="resetZoom()" title="원래 크기">↺</button>
+        </div>
+        <button class="btn btn-secondary" onclick="copyDiagramCode()">📋 Mermaid 코드 복사</button>
+        <button class="btn btn-secondary" onclick="downloadDiagramSVG()">💾 SVG 저장</button>
+      </div>
+      <div class="diagram-container" id="diagramContainer">
+        <div class="diagram-wrapper" id="diagramWrapper">
+          <pre class="mermaid" id="mermaidDiagram"></pre>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
     let sources = [];
     let allEntities = [];
     let activeFilter = 'all';
+    let currentView = 'cards';
+    let mermaidCode = '';
+    let currentZoom = 1.0;
 
     // Entity type metadata
     const entityTypes = {
@@ -640,6 +788,12 @@
         allEntities = data.entities;
         displayResults(data);
         setStatus('success', `✅ 추출 완료! ${data.total_count}개 엔티티 발견`);
+
+        // Show view tabs
+        document.getElementById('viewTabs').style.display = 'flex';
+
+        // Generate diagram
+        generateDiagram();
 
       } catch (e) {
         setStatus('error', `❌ 오류: ${e.message}`);
@@ -778,9 +932,11 @@
       sources = [];
       allEntities = [];
       activeFilter = 'all';
+      currentView = 'cards';
       updateSourceList();
       document.getElementById('stats').style.display = 'none';
       document.getElementById('filterChips').style.display = 'none';
+      document.getElementById('viewTabs').style.display = 'none';
       document.getElementById('entitiesGrid').innerHTML = `
         <div class="empty-state">
           <div class="icon">📦</div>
@@ -788,7 +944,259 @@
           <p>소스를 추가하고 엔티티 추출을 실행해보세요</p>
         </div>
       `;
+      document.getElementById('diagramView').style.display = 'none';
       setStatus('', '');
+    }
+
+    // Switch View
+    function switchView(view) {
+      currentView = view;
+
+      // Update tab states
+      document.querySelectorAll('.view-tab').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      event.target.classList.add('active');
+
+      // Toggle views
+      if (view === 'cards') {
+        document.getElementById('entitiesGrid').style.display = 'grid';
+        document.getElementById('diagramView').style.display = 'none';
+      } else {
+        document.getElementById('entitiesGrid').style.display = 'none';
+        document.getElementById('diagramView').style.display = 'block';
+        updateDiagram();
+      }
+    }
+
+    // Escape text for Mermaid
+    function escapeMermaid(text) {
+      return text
+        .replace(/"/g, '#quot;')  // Replace quotes with HTML entity
+        .replace(/\n/g, ' ')       // Remove newlines
+        .replace(/\r/g, '')        // Remove carriage returns
+        .replace(/\[/g, '#91;')    // Escape brackets
+        .replace(/\]/g, '#93;')
+        .replace(/\{/g, '#123;')   // Escape braces
+        .replace(/\}/g, '#125;')
+        .replace(/</g, '#lt;')     // Escape angle brackets
+        .replace(/>/g, '#gt;')
+        .replace(/&/g, '#amp;')    // Escape ampersand
+        .replace(/\|/g, '#124;')   // Escape pipe
+        .trim();
+    }
+
+    // Generate Mermaid diagram
+    function generateDiagram() {
+      const showRelations = document.getElementById('showRelations')?.checked ?? true;
+      const groupByType = document.getElementById('groupByType')?.checked ?? true;
+
+      if (groupByType) {
+        mermaidCode = generateGroupedDiagram(showRelations);
+      } else {
+        mermaidCode = generateFlatDiagram(showRelations);
+      }
+    }
+
+    function generateGroupedDiagram(showRelations) {
+      let code = 'graph TB\n';
+
+      // Group entities by type
+      const byType = {};
+      allEntities.forEach((e, idx) => {
+        if (!byType[e.type]) byType[e.type] = [];
+        byType[e.type].push({ ...e, id: `E${idx}` });
+      });
+
+      // Create subgraphs for each type
+      Object.entries(byType).forEach(([type, entities]) => {
+        const meta = entityTypes[type] || { label: type, icon: '📄' };
+        code += `\n  subgraph ${type}["${meta.icon} ${meta.label}"]\n`;
+
+        entities.forEach(e => {
+          const content = e.content.length > 40 ? e.content.substring(0, 40) + '...' : e.content;
+          const escaped = escapeMermaid(content);
+          code += `    ${e.id}["${escaped}"]\n`;
+        });
+
+        code += `  end\n`;
+      });
+
+      // Add relationships if enabled
+      if (showRelations) {
+        code += '\n  %% Relationships\n';
+
+        // Find relationships based on entity fields and content
+        allEntities.forEach((e1, i) => {
+          allEntities.forEach((e2, j) => {
+            if (i >= j) return;
+
+            // Check if entities are related
+            const related = isRelated(e1, e2);
+            if (related) {
+              code += `  E${i} -.-> E${j}\n`;
+            }
+          });
+        });
+      }
+
+      // Styling
+      code += '\n  classDef default fill:#1a1a2e,stroke:#8b5cf6,stroke-width:2px,color:#e8e8f0\n';
+
+      return code;
+    }
+
+    function generateFlatDiagram(showRelations) {
+      let code = 'graph LR\n';
+
+      // Add all entities
+      allEntities.forEach((e, idx) => {
+        const meta = entityTypes[e.type] || { icon: '📄' };
+        const content = e.content.length > 30 ? e.content.substring(0, 30) + '...' : e.content;
+        const escaped = escapeMermaid(content);
+        code += `  E${idx}["${meta.icon} ${escaped}"]\n`;
+      });
+
+      // Add relationships if enabled
+      if (showRelations) {
+        code += '\n  %% Relationships\n';
+
+        allEntities.forEach((e1, i) => {
+          allEntities.forEach((e2, j) => {
+            if (i >= j) return;
+
+            const related = isRelated(e1, e2);
+            if (related) {
+              code += `  E${i} --> E${j}\n`;
+            }
+          });
+        });
+      }
+
+      // Styling by type
+      Object.keys(entityTypes).forEach(type => {
+        const indices = allEntities
+          .map((e, i) => e.type === type ? `E${i}` : null)
+          .filter(x => x)
+          .join(',');
+
+        if (indices) {
+          const color = entityTypes[type].color || 'var(--entity-default)';
+          code += `  class ${indices} ${type}Class\n`;
+        }
+      });
+
+      return code;
+    }
+
+    // Check if two entities are related
+    function isRelated(e1, e2) {
+      // Simple heuristic: check if they share significant words
+      const words1 = new Set(e1.content.toLowerCase().split(/\s+/).filter(w => w.length > 3));
+      const words2 = new Set(e2.content.toLowerCase().split(/\s+/).filter(w => w.length > 3));
+
+      const commonWords = [...words1].filter(w => words2.has(w));
+
+      // Related if they share 2+ significant words or same field values
+      if (commonWords.length >= 2) return true;
+
+      // Check field overlaps
+      const fields1 = Object.values(e1.fields).map(v => String(v).toLowerCase());
+      const fields2 = Object.values(e2.fields).map(v => String(v).toLowerCase());
+
+      return fields1.some(f1 => fields2.includes(f1));
+    }
+
+    // Update diagram rendering
+    async function updateDiagram() {
+      generateDiagram();
+
+      const container = document.getElementById('mermaidDiagram');
+      container.textContent = mermaidCode;
+      container.removeAttribute('data-processed');
+
+      try {
+        await window.mermaid.run({ nodes: [container] });
+
+        // Reset zoom when diagram changes
+        currentZoom = 1.0;
+        applyZoom();
+      } catch (e) {
+        console.error('Mermaid rendering error:', e);
+        container.innerHTML = `<div style="color: var(--warn); padding: 20px;">
+          ⚠️ 다이어그램 렌더링 오류<br>
+          <small>${e.message}</small>
+        </div>`;
+      }
+    }
+
+    // Copy diagram code
+    async function copyDiagramCode() {
+      try {
+        await navigator.clipboard.writeText(mermaidCode);
+        const btn = event.target;
+        const orig = btn.innerHTML;
+        btn.innerHTML = '✅ 복사됨!';
+        setTimeout(() => btn.innerHTML = orig, 2000);
+      } catch (e) {
+        alert('복사 실패: ' + e.message);
+      }
+    }
+
+    // Download diagram as SVG
+    async function downloadDiagramSVG() {
+      try {
+        const svg = document.querySelector('#mermaidDiagram svg');
+        if (!svg) {
+          alert('다이어그램이 렌더링되지 않았습니다');
+          return;
+        }
+
+        const svgData = new XMLSerializer().serializeToString(svg);
+        const blob = new Blob([svgData], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `entity_diagram_${new Date().toISOString().slice(0, 10)}.svg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        alert('다운로드 실패: ' + e.message);
+      }
+    }
+
+    // Zoom controls
+    function zoomDiagram(delta) {
+      currentZoom = Math.max(0.2, Math.min(5.0, currentZoom + delta));
+      applyZoom();
+    }
+
+    function resetZoom() {
+      currentZoom = 1.0;
+      applyZoom();
+    }
+
+    function applyZoom() {
+      const wrapper = document.getElementById('diagramWrapper');
+      if (wrapper) {
+        wrapper.style.transform = `scale(${currentZoom})`;
+      }
+
+      // Update zoom level display
+      const zoomLabel = document.getElementById('zoomLevel');
+      if (zoomLabel) {
+        zoomLabel.textContent = `${Math.round(currentZoom * 100)}%`;
+      }
+
+      // Adjust container scroll if needed
+      const container = document.getElementById('diagramContainer');
+      if (container && currentZoom > 1) {
+        // Ensure scrollbars appear when zoomed in
+        container.style.overflow = 'auto';
+      }
     }
 
     // Set status
@@ -797,6 +1205,36 @@
       el.className = `status ${type} ${type ? 'show' : ''}`;
       el.innerHTML = msg;
     }
+
+    // Auto-load from sessionStorage on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      const lastExtraction = sessionStorage.getItem('lastExtraction');
+      if (lastExtraction) {
+        try {
+          const data = JSON.parse(lastExtraction);
+          const age = Date.now() - data.timestamp;
+
+          // Auto-load if less than 5 minutes old
+          if (age < 5 * 60 * 1000) {
+            sources = data.sources || [];
+            document.getElementById('profileSelect').value = data.profile || 'general';
+            updateSourceList();
+
+            // Show info banner
+            setStatus('loading', `📥 메인 UI에서 전달된 소스 ${sources.length}개를 자동으로 불러왔습니다. "엔티티 추출" 버튼을 클릭하세요.`);
+
+            // Auto-extract after 1 second
+            setTimeout(() => {
+              if (sources.length > 0) {
+                extractEntities();
+              }
+            }, 1000);
+          }
+        } catch (e) {
+          console.error('Failed to load last extraction:', e);
+        }
+      }
+    });
   </script>
 </body>
 </html>

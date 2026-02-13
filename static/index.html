@@ -114,7 +114,7 @@
       display: flex; flex-direction: column;
     }
     .preview-tabs {
-      display: flex; gap: 4px; margin-bottom: 12px;
+      display: flex; gap: 4px; margin-bottom: 12px; align-items: center;
     }
     .preview-tab {
       padding: 8px 16px; background: var(--surface);
@@ -294,6 +294,16 @@
         </div>
 
         <div class="option-group">
+          <label>🌐 출력 언어</label>
+          <select id="outputLanguage">
+            <option value="ko" selected>한국어 (Korean)</option>
+            <option value="en">영어 (English)</option>
+            <option value="ja">일본어 (Japanese)</option>
+            <option value="zh">중국어 (Chinese)</option>
+          </select>
+        </div>
+
+        <div class="option-group">
           <label>🤖 LLM</label>
           <select id="llmSelect">
             <option value="ollama">Ollama (로컬)</option>
@@ -337,6 +347,13 @@
         <div class="preview-tabs">
           <div class="preview-tab active" onclick="switchTab('rendered')">👁 프리뷰</div>
           <div class="preview-tab" onclick="switchTab('source')">📝 소스 편집</div>
+          <div style="flex:1;"></div>
+          <button class="btn btn-secondary" onclick="copyToClipboard()" id="copyBtn" style="padding:6px 12px; font-size:0.85em;" disabled title="클립보드에 복사">
+            📋 복사
+          </button>
+          <button class="btn btn-secondary" onclick="downloadMarkdown()" id="downloadBtn" style="padding:6px 12px; font-size:0.85em;" disabled title="마크다운 파일로 저장">
+            💾 다운로드
+          </button>
         </div>
 
         <div class="preview-content">
@@ -351,7 +368,7 @@
         </div>
 
         <!-- Publish bar -->
-        <div class="publish-bar" style="flex-wrap:wrap;">
+        <div class="publish-bar publish-section" style="flex-wrap:wrap;">
           <input type="text" id="pageTitle" placeholder="페이지 제목" style="flex:1; min-width:200px;">
           <select id="spaceSelect" style="width:160px;" onchange="onSpaceChange()">
             <option value="">Space 선택...</option>
@@ -525,6 +542,7 @@
         const startTime = Date.now();
 
         const outputLength = document.getElementById('lengthSelect').value;
+        const outputLanguage = document.getElementById('outputLanguage').value;
 
         const resp = await fetch('/api/process', {
           method: 'POST',
@@ -535,7 +553,8 @@
             format,
             use_langextract: useLangExtract,
             extraction_profile: extractProfile,
-            output_length: outputLength
+            output_length: outputLength,
+            output_language: outputLanguage
           }),
         });
 
@@ -559,6 +578,8 @@
         updatePreview();
         document.getElementById('sourceEditor').value = generatedBody;
         document.getElementById('publishBtn').disabled = false;
+        document.getElementById('copyBtn').disabled = false;
+        document.getElementById('downloadBtn').disabled = false;
 
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
         setStatus('success', `✅ 생성 완료 (${data.sources_count}개 소스, ${generatedBody.length}자, ${elapsed}초 소요)`);
@@ -593,6 +614,54 @@
       } else {
         document.getElementById('previewRendered').style.display = 'none';
         document.getElementById('previewSource').style.display = '';
+      }
+    }
+
+    // --- Copy & Download ---
+    async function copyToClipboard() {
+      try {
+        // Get latest content from editor
+        const content = document.getElementById('sourceEditor').value || generatedBody;
+        await navigator.clipboard.writeText(content);
+
+        // Visual feedback
+        const btn = document.getElementById('copyBtn');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '✅ 복사됨!';
+        setTimeout(() => {
+          btn.innerHTML = originalText;
+        }, 2000);
+
+        setStatus('success', '📋 클립보드에 복사되었습니다');
+      } catch (e) {
+        setStatus('error', '❌ 복사 실패: ' + e.message);
+      }
+    }
+
+    function downloadMarkdown() {
+      try {
+        // Get latest content from editor
+        const content = document.getElementById('sourceEditor').value || generatedBody;
+
+        // Generate filename from page title or timestamp
+        const title = document.getElementById('pageTitle').value.trim() ||
+                      `document_${new Date().toISOString().slice(0,10)}`;
+        const filename = `${title.replace(/[^a-zA-Z0-9가-힣_-]/g, '_')}.md`;
+
+        // Create blob and download
+        const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        setStatus('success', `💾 ${filename} 다운로드 완료`);
+      } catch (e) {
+        setStatus('error', '❌ 다운로드 실패: ' + e.message);
       }
     }
 
@@ -744,6 +813,13 @@
           document.getElementById('vizEntities').textContent =
             `추출된 엔티티: ${data.entities_count}개`;
 
+          // Save to sessionStorage for entity viewer
+          sessionStorage.setItem('lastExtraction', JSON.stringify({
+            sources: sources,
+            profile: profile,
+            timestamp: Date.now()
+          }));
+
           // Load HTML into iframe
           const frame = document.getElementById('vizFrame');
           frame.srcdoc = data.html;
@@ -774,6 +850,19 @@
 
     // --- Entities Viewer ---
     function openEntitiesViewer() {
+      // Save current extraction context to sessionStorage
+      if (sources.length > 0) {
+        const useLangExtract = document.getElementById('useLangExtract').checked;
+        const profile = document.getElementById('extractProfile').value;
+
+        sessionStorage.setItem('lastExtraction', JSON.stringify({
+          sources: sources,
+          profile: profile,
+          useLangExtract: useLangExtract,
+          timestamp: Date.now()
+        }));
+      }
+
       window.open('/entities', '_blank');
     }
 
@@ -781,13 +870,28 @@
     async function loadSpaces() {
       try {
         const resp = await fetch('/api/confluence/spaces');
-        if (!resp.ok) return;
+        if (!resp.ok) {
+          // Hide Confluence publish section if not configured
+          const publishSection = document.querySelector('.publish-section');
+          if (publishSection) {
+            publishSection.style.display = 'none';
+          }
+          return;
+        }
         const spaces = await resp.json();
-        if (spaces.error) return;
+        if (spaces.error) {
+          const publishSection = document.querySelector('.publish-section');
+          if (publishSection) publishSection.style.display = 'none';
+          return;
+        }
         const sel = document.getElementById('spaceSelect');
         sel.innerHTML = '<option value="">Space 선택...</option>' +
           spaces.map(s => `<option value="${s.key}">${s.key} - ${s.name}</option>`).join('');
-      } catch(e) { /* Confluence not configured */ }
+      } catch(e) {
+        // Hide Confluence section on error
+        const publishSection = document.querySelector('.publish-section');
+        if (publishSection) publishSection.style.display = 'none';
+      }
     }
 
     async function onSpaceChange() {
