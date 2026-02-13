@@ -55,8 +55,8 @@ async def run(args):
     llm_cfg = config.get("llm", {})
     processor = LLMProcessor(
         provider=llm_cfg.get("provider", "ollama"),
-        model=llm_cfg.get("model", "qwen3:14b-128k"),
-        base_url=llm_cfg.get("base_url", "http://localhost:11434"),
+        model=llm_cfg.get("model", "gemma3:4b"),
+        base_url=llm_cfg.get("base_url", ""),
         api_key=llm_cfg.get("api_key"),
         ssl_verify=ssl_verify,
     )
@@ -150,8 +150,8 @@ def main():
         llm_cfg = config.get("llm", {})
         processor = LLMProcessor(
             provider=llm_cfg.get("provider", "ollama"),
-            model=llm_cfg.get("model", "qwen3:14b-128k"),
-            base_url=llm_cfg.get("base_url", "http://localhost:11434"),
+            model=llm_cfg.get("model", "gemma3:4b"),
+            base_url=llm_cfg.get("base_url", ""),
             api_key=llm_cfg.get("api_key"),
             ssl_verify=ssl_verify,
         )

@@ -108,7 +108,7 @@ class StructuredExtractor:
     def __init__(
         self,
         model_id: str = "gemma2:2b",
-        model_url: str = "http://localhost:11434",
+        model_url: Optional[str] = None,
         api_key: Optional[str] = None,
     ):
         self.model_id = model_id
@@ -186,12 +186,12 @@ class StructuredExtractor:
                         f"LangExtract 추출 실패 (model: {self.model_id}, url: {self.model_url}):\n"
                         f"첫 시도: {error_msg}\n"
                         f"재시도: {str(e2)}\n"
-                        f"Ollama가 실행 중인지 확인하세요: http://localhost:11434"
+                        f"Ollama가 실행 중인지 확인하세요: {self.model_url or 'LLM_BASE_URL 환경변수를 설정하세요'}"
                     ) from e2
             else:
                 raise RuntimeError(
                     f"LangExtract 추출 실패 (model: {self.model_id}, url: {self.model_url}): {error_msg}\n"
-                    f"Ollama가 실행 중인지 확인하세요: http://localhost:11434"
+                    f"Ollama가 실행 중인지 확인하세요: {self.model_url or 'LLM_BASE_URL 환경변수를 설정하세요'}"
                 ) from e
 
         # Parse results

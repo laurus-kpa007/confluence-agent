@@ -192,11 +192,13 @@ class WebUI:
             # Use config model for consistency
             llm_config = self.config.get("llm", {})
             model = llm_config.get("model", "gemma3:4b")
-            base_url = llm_config.get("base_url", "http://localhost:11434")
+            base_url = llm_config.get("base_url")
+            api_key = llm_config.get("api_key")
 
             extractor = StructuredExtractor(
                 model_id=model,
                 model_url=base_url,
+                api_key=api_key,
             )
             with tempfile.TemporaryDirectory() as tmpdir:
                 result, html_str = await extractor.extract_with_visualization(
@@ -268,11 +270,13 @@ class WebUI:
             # Use config model for consistency
             llm_config = self.config.get("llm", {})
             model = llm_config.get("model", "gemma3:4b")
-            base_url = llm_config.get("base_url", "http://localhost:11434")
+            base_url = llm_config.get("base_url")
+            api_key = llm_config.get("api_key")
 
             extractor = StructuredExtractor(
                 model_id=model,
                 model_url=base_url,
+                api_key=api_key,
             )
             result = await extractor.extract(combined[:5000], profile=profile)
 

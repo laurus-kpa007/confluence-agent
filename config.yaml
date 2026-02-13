@@ -6,18 +6,18 @@
 ssl_verify: true
 
 llm:
-  provider: ollama
-  model: gemma3:4b  # Fast and efficient (3-4x faster than qwen3:14b)
-  base_url: http://localhost:11434
+  provider: ${LLM_PROVIDER:ollama}
+  model: ${LLM_MODEL:gemma3:4b}  # Fast and efficient (3-4x faster than qwen3:14b)
+  base_url: ${LLM_BASE_URL:http://localhost:11434}
   # provider: anthropic
   # model: claude-sonnet-4-20250514
   # api_key: ${ANTHROPIC_API_KEY}
 
 confluence:
-  url: https://your-domain.atlassian.net
-  username: your-email@company.com
+  url: ${CONFLUENCE_URL}
+  username: ${CONFLUENCE_USERNAME}
   api_token: ${CONFLUENCE_API_TOKEN}
-  default_space: TEAM
+  default_space: ${CONFLUENCE_DEFAULT_SPACE:TEAM}
 
 # MCP servers for additional sources
 # Enable as needed and configure credentials
