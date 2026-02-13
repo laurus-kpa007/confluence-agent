@@ -17,6 +17,8 @@ confluence:
   url: ${CONFLUENCE_URL}
   username: ${CONFLUENCE_USERNAME}
   api_token: ${CONFLUENCE_API_TOKEN}
+  # auth_type: basic (Atlassian Cloud, 기본값) / bearer (Server/DC 개인 액세스 토큰)
+  auth_type: ${CONFLUENCE_AUTH_TYPE:basic}
   default_space: ${CONFLUENCE_DEFAULT_SPACE:TEAM}
 
 # MCP servers for additional sources

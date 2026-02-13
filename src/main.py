@@ -82,6 +82,7 @@ async def run(args):
             username=conf_cfg["username"],
             api_token=conf_cfg["api_token"],
             ssl_verify=ssl_verify,
+            auth_type=conf_cfg.get("auth_type", "basic"),
         )
         space = args.space or conf_cfg.get("default_space", "TEAM")
         title = args.title or contents[0].title

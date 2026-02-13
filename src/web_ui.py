@@ -28,8 +28,9 @@ class WebUI:
         conf_url = conf_cfg.get("url", "").strip()
         conf_username = conf_cfg.get("username", "").strip()
         conf_token = conf_cfg.get("api_token", "").strip()
+        conf_auth_type = conf_cfg.get("auth_type", "basic").strip()
         if conf_url:
-            if not conf_username or not conf_token:
+            if conf_auth_type != "bearer" and (not conf_username or not conf_token):
                 import logging
                 logging.getLogger(__name__).warning(
                     "Confluence URL is set but username or api_token is empty. "
@@ -40,6 +41,7 @@ class WebUI:
                 username=conf_username,
                 api_token=conf_token,
                 ssl_verify=get_ssl_verify(config),
+                auth_type=conf_auth_type,
             )
 
         self.app = web.Application()
@@ -338,9 +340,14 @@ class WebUI:
             return web.json_response({"error": f"Confluence 연결 실패 - URL을 확인하세요: {e}"}, status=500)
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 401:
-                return web.json_response({"error": "인증 실패 - username/api_token을 확인하세요"}, status=500)
+                auth_type = self.config.get("confluence", {}).get("auth_type", "basic")
+                if auth_type == "bearer":
+                    msg = "인증 실패 - 개인 액세스 토큰(PAT)이 유효한지 확인하세요"
+                else:
+                    msg = "인증 실패 - username/api_token을 확인하세요"
+                return web.json_response({"error": msg}, status=500)
             elif e.response.status_code == 403:
-                return web.json_response({"error": "권한 없음 - API 토큰 권한을 확인하세요"}, status=500)
+                return web.json_response({"error": "권한 없음 - API 토큰 권한을 확인하세요. Server/DC 환경에서 개인 토큰(PAT) 사용 시 .env에 CONFLUENCE_AUTH_TYPE=bearer 설정이 필요합니다."}, status=500)
             return web.json_response({"error": f"Confluence API 오류 (HTTP {e.response.status_code})"}, status=500)
         except Exception as e:
             return web.json_response({"error": f"Confluence 오류: {e}"}, status=500)
