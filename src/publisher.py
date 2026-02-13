@@ -9,11 +9,28 @@ logger = logging.getLogger(__name__)
 class ConfluencePublisher:
     """Publish content to Confluence."""
 
-    def __init__(self, url: str, username: str, api_token: str, ssl_verify: bool = True):
+    def __init__(self, url: str, username: str, api_token: str, ssl_verify: bool = True, auth_type: str = "basic"):
         self.url = url.rstrip("/")
-        self.auth = (username, api_token)
         self.ssl_verify = ssl_verify
-        logger.debug("ConfluencePublisher init: url=%s, username=%s, ssl_verify=%s", self.url, username, ssl_verify)
+        self.auth_type = auth_type.lower()
+
+        if self.auth_type == "bearer":
+            # Confluence Server/Data Center with Personal Access Token (PAT)
+            self.auth = None
+            self._extra_headers = {"Authorization": f"Bearer {api_token}"}
+        else:
+            # Atlassian Cloud: Basic Auth (email:api_token)
+            self.auth = (username, api_token)
+            self._extra_headers = {}
+
+        logger.debug("ConfluencePublisher init: url=%s, username=%s, auth_type=%s, ssl_verify=%s",
+                      self.url, username, self.auth_type, ssl_verify)
+
+    def _merge_headers(self, headers: Optional[dict] = None) -> dict:
+        merged = dict(self._extra_headers)
+        if headers:
+            merged.update(headers)
+        return merged
 
     async def list_spaces(self, limit: int = 50) -> List[dict]:
         """List all accessible spaces."""
@@ -22,6 +39,7 @@ class ConfluencePublisher:
                 f"{self.url}/rest/api/space",
                 params={"limit": limit, "type": "global"},
                 auth=self.auth,
+                headers=self._merge_headers(),
             )
             resp.raise_for_status()
             return [
@@ -33,14 +51,13 @@ class ConfluencePublisher:
         """List pages in a space, optionally under a parent."""
         async with httpx.AsyncClient(timeout=15.0, verify=self.ssl_verify) as client:
             if parent_id:
-                # Get child pages of a specific page
                 resp = await client.get(
                     f"{self.url}/rest/api/content/{parent_id}/child/page",
                     params={"limit": limit, "expand": "version"},
                     auth=self.auth,
+                    headers=self._merge_headers(),
                 )
             else:
-                # Get top-level pages in space
                 resp = await client.get(
                     f"{self.url}/rest/api/content",
                     params={
@@ -50,6 +67,7 @@ class ConfluencePublisher:
                         "expand": "ancestors,version",
                     },
                     auth=self.auth,
+                    headers=self._merge_headers(),
                 )
             resp.raise_for_status()
             results = resp.json().get("results", [])
@@ -74,6 +92,7 @@ class ConfluencePublisher:
                 f"{self.url}/rest/api/content/search",
                 params={"cql": cql, "limit": limit},
                 auth=self.auth,
+                headers=self._merge_headers(),
             )
             resp.raise_for_status()
             return [
@@ -87,14 +106,12 @@ class ConfluencePublisher:
 
     async def get_page_tree(self, space_key: str, depth: int = 2) -> List[dict]:
         """Get page tree structure for a space."""
-        # Get root pages (no ancestors)
         all_pages = await self.list_pages(space_key, limit=100)
         root_pages = [p for p in all_pages if p["parent_id"] is None]
 
         if depth <= 1:
             return root_pages
 
-        # Get children for each root
         tree = []
         async with httpx.AsyncClient(timeout=15.0, verify=self.ssl_verify) as client:
             for root in root_pages:
@@ -130,7 +147,7 @@ class ConfluencePublisher:
                 f"{self.url}/rest/api/content",
                 json=payload,
                 auth=self.auth,
-                headers={"Content-Type": "application/json"},
+                headers=self._merge_headers({"Content-Type": "application/json"}),
             )
             logger.debug("Create page response: status=%d", resp.status_code)
             resp.raise_for_status()
@@ -150,17 +167,16 @@ class ConfluencePublisher:
     ) -> dict:
         """Update an existing Confluence page."""
         logger.debug("Updating page: id=%s, title=%s", page_id, title)
-        # Get current version
         async with httpx.AsyncClient(timeout=30.0, verify=self.ssl_verify) as client:
             resp = await client.get(
                 f"{self.url}/rest/api/content/{page_id}",
                 auth=self.auth,
+                headers=self._merge_headers(),
             )
             resp.raise_for_status()
             current = resp.json()
             version = current["version"]["number"] + 1
 
-            # Update
             payload = {
                 "type": "page",
                 "title": title,
@@ -176,7 +192,7 @@ class ConfluencePublisher:
                 f"{self.url}/rest/api/content/{page_id}",
                 json=payload,
                 auth=self.auth,
-                headers={"Content-Type": "application/json"},
+                headers=self._merge_headers({"Content-Type": "application/json"}),
             )
             resp.raise_for_status()
             result = resp.json()
