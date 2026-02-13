@@ -9,7 +9,7 @@ import httpx
 
 from .router import SourceRouter
 from .processor import LLMProcessor
-from .publisher import ConfluencePublisher
+from .publisher import ConfluencePublisher, ConfluenceAuthError
 from .templates import TemplateManager
 from .config_loader import get_ssl_verify
 
@@ -338,18 +338,38 @@ class WebUI:
             return web.json_response(spaces)
         except httpx.ConnectError as e:
             return web.json_response({"error": f"Confluence 연결 실패 - URL을 확인하세요: {e}"}, status=500)
+        except httpx.ConnectTimeout as e:
+            return web.json_response({"error": f"Confluence 연결 시간 초과 - URL/네트워크를 확인하세요: {e}"}, status=500)
+        except ConfluenceAuthError as e:
+            return web.json_response({"error": str(e)}, status=500)
         except httpx.HTTPStatusError as e:
+            auth_type = self.config.get("confluence", {}).get("auth_type", "basic")
+            body_preview = e.response.text[:300] if e.response.text else ""
+            import logging
+            logging.getLogger(__name__).error(
+                "Confluence API error: status=%d, auth_type=%s, body=%s",
+                e.response.status_code, auth_type, body_preview
+            )
             if e.response.status_code == 401:
-                auth_type = self.config.get("confluence", {}).get("auth_type", "basic")
                 if auth_type == "bearer":
                     msg = "인증 실패 - 개인 액세스 토큰(PAT)이 유효한지 확인하세요"
                 else:
                     msg = "인증 실패 - username/api_token을 확인하세요"
                 return web.json_response({"error": msg}, status=500)
             elif e.response.status_code == 403:
-                return web.json_response({"error": "권한 없음 - API 토큰 권한을 확인하세요. Server/DC 환경에서 개인 토큰(PAT) 사용 시 .env에 CONFLUENCE_AUTH_TYPE=bearer 설정이 필요합니다."}, status=500)
-            return web.json_response({"error": f"Confluence API 오류 (HTTP {e.response.status_code})"}, status=500)
+                if auth_type != "bearer":
+                    msg = ("권한 없음 (403) - 현재 auth_type=basic 입니다. "
+                           "사내 Confluence Server/DC에서 개인 토큰(PAT)을 사용하시면 "
+                           ".env에 CONFLUENCE_AUTH_TYPE=bearer 를 추가하세요. "
+                           "또는 관리자가 Basic Auth를 비활성화했을 수 있습니다.")
+                else:
+                    msg = ("권한 없음 (403) - PAT 토큰에 해당 스페이스 접근 권한이 있는지 확인하세요. "
+                           "Confluence 관리자 > 개인 액세스 토큰에서 권한 범위를 확인하세요.")
+                return web.json_response({"error": msg}, status=500)
+            return web.json_response({"error": f"Confluence API 오류 (HTTP {e.response.status_code}): {body_preview}"}, status=500)
         except Exception as e:
+            import logging, traceback
+            logging.getLogger(__name__).error("Confluence error: %s\n%s", e, traceback.format_exc())
             return web.json_response({"error": f"Confluence 오류: {e}"}, status=500)
 
     async def _list_pages(self, request):
