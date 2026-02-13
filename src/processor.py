@@ -16,8 +16,8 @@ class LLMProcessor:
     def __init__(
         self,
         provider: str = "ollama",
-        model: str = "qwen3:14b-128k",
-        base_url: str = "http://localhost:11434",
+        model: str = "gemma3:4b",
+        base_url: str = "",
         api_key: Optional[str] = None,
         ssl_verify: bool = True,
     ):
