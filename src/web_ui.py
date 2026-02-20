@@ -54,6 +54,7 @@ class WebUI:
         self.app.router.add_put("/api/templates/{name}", self._save_template)
         self.app.router.add_post("/api/templates", self._create_template)
         self.app.router.add_post("/api/extract", self._extract)
+        self.app.router.add_post("/api/analyze_sources", self._analyze_sources)
         self.app.router.add_post("/api/process", self._process)
         self.app.router.add_post("/api/process_stream", self._process_stream)
         self.app.router.add_post("/api/publish", self._publish)
@@ -113,6 +114,87 @@ class WebUI:
 
         return web.json_response(results)
 
+    async def _analyze_sources(self, request):
+        """Analyze source materials and recommend template + extraction profile."""
+        try:
+            data = await request.json()
+            sources = data.get("sources", [])
+            if not sources:
+                return web.json_response({"template": "summary", "extraction_profile": "general", "use_langextract": False})
+
+            contents = await self.router.extract_many(sources)
+            combined = "\n".join(c.text[:3000] for c in contents)[:6000]
+            combined_lower = combined.lower()
+
+            # Collect source type hints
+            source_types = [c.source_type for c in contents]
+            source_titles = " ".join(c.title for c in contents).lower()
+
+            # --- Template selection heuristics ---
+            template = "summary"  # default
+            extraction_profile = "general"
+            use_langextract = False
+
+            # Meeting keywords
+            meeting_kw = ["회의", "미팅", "meeting", "minutes", "참석자", "안건", "논의", "결정사항",
+                          "액션아이템", "action item", "agenda", "attendee", "발언", "회의록"]
+            meeting_score = sum(1 for kw in meeting_kw if kw in combined_lower or kw in source_titles)
+
+            # Tech doc keywords
+            tech_kw = ["api", "sdk", "아키텍처", "architecture", "코드", "code", "함수", "function",
+                       "설치", "install", "배포", "deploy", "서버", "server", "데이터베이스", "database",
+                       "프레임워크", "framework", "라이브러리", "library", "깃", "git", "도커", "docker",
+                       "class", "import", "def ", "return", "config", "설정"]
+            tech_score = sum(1 for kw in tech_kw if kw in combined_lower or kw in source_titles)
+
+            # Research keywords
+            research_kw = ["연구", "research", "논문", "paper", "분석", "analysis", "비교", "comparison",
+                           "결론", "conclusion", "조사", "survey", "트렌드", "trend", "인사이트",
+                           "insight", "데이터", "data", "통계", "statistics", "리서치", "보고서"]
+            research_score = sum(1 for kw in research_kw if kw in combined_lower or kw in source_titles)
+
+            # Weekly report keywords
+            weekly_kw = ["주간", "weekly", "실적", "이슈", "차주", "금주", "보고", "report",
+                         "진행", "progress", "완료", "계획", "plan", "리스크", "risk"]
+            weekly_score = sum(1 for kw in weekly_kw if kw in combined_lower or kw in source_titles)
+
+            scores = {
+                "meeting_notes": meeting_score,
+                "tech_doc": tech_score,
+                "research": research_score,
+                "weekly_report": weekly_score,
+                "summary": 1,  # baseline
+            }
+            template = max(scores, key=scores.get)
+
+            # Map template → extraction profile
+            profile_map = {
+                "meeting_notes": "meeting",
+                "tech_doc": "tech_review",
+                "research": "research",
+                "weekly_report": "general",
+                "summary": "general",
+            }
+            extraction_profile = profile_map.get(template, "general")
+
+            # Enable LangExtract if strong signal found
+            max_score = scores[template]
+            use_langextract = max_score >= 3
+
+            return web.json_response({
+                "template": template,
+                "extraction_profile": extraction_profile,
+                "use_langextract": use_langextract,
+                "scores": scores,
+            })
+        except Exception as e:
+            return web.json_response({
+                "template": "summary",
+                "extraction_profile": "general",
+                "use_langextract": False,
+                "error": str(e),
+            })
+
     async def _process(self, request):
         """Process extracted content with LLM."""
         try:
@@ -144,15 +226,11 @@ class WebUI:
             if output_format == "confluence":
                 body = self._clean_confluence_macros(body)
 
-            # Extract source title for auto-fill
-            source_title = contents[0].title if contents else ""
-
             return web.json_response({
                 "body": body,
                 "format": output_format,
                 "template": template,
                 "sources_count": len(contents),
-                "source_title": source_title,
             })
         except Exception as e:
             import traceback
@@ -178,6 +256,7 @@ class WebUI:
             extraction_profile = data.get("extraction_profile", "general")
             output_length = data.get("output_length", "normal")
             output_language = data.get("output_language", "ko")
+            auto_select = data.get("auto_select", False)
 
             response = web.StreamResponse(
                 status=200,
@@ -195,9 +274,37 @@ class WebUI:
             await response.write(f"data: {json.dumps({'type': 'status', 'step': 'extract', 'message': '소스에서 텍스트 추출 중...'})}\n\n".encode())
 
             contents = await self.router.extract_many(sources)
-            source_title = contents[0].title if contents else ""
 
-            await response.write(f"data: {json.dumps({'type': 'title', 'title': source_title})}\n\n".encode())
+            # Auto-select template and extraction profile if requested
+            if auto_select and contents:
+                combined_preview = "\n".join(c.text[:3000] for c in contents)[:6000]
+                combined_lower = combined_preview.lower()
+                source_titles = " ".join(c.title for c in contents).lower()
+
+                meeting_kw = ["회의", "미팅", "meeting", "minutes", "참석자", "안건", "논의", "결정사항",
+                              "액션아이템", "action item", "agenda", "attendee", "발언", "회의록"]
+                tech_kw = ["api", "sdk", "아키텍처", "architecture", "코드", "code", "함수", "function",
+                           "설치", "install", "배포", "deploy", "서버", "server", "데이터베이스", "database",
+                           "프레임워크", "framework", "라이브러리", "library", "class", "import", "def ", "config"]
+                research_kw = ["연구", "research", "논문", "paper", "분석", "analysis", "비교", "comparison",
+                               "결론", "conclusion", "조사", "survey", "트렌드", "trend", "리서치", "보고서"]
+                weekly_kw = ["주간", "weekly", "실적", "이슈", "차주", "금주", "보고", "report",
+                             "진행", "progress", "완료", "계획", "plan", "리스크", "risk"]
+
+                scores = {
+                    "meeting_notes": sum(1 for kw in meeting_kw if kw in combined_lower or kw in source_titles),
+                    "tech_doc": sum(1 for kw in tech_kw if kw in combined_lower or kw in source_titles),
+                    "research": sum(1 for kw in research_kw if kw in combined_lower or kw in source_titles),
+                    "weekly_report": sum(1 for kw in weekly_kw if kw in combined_lower or kw in source_titles),
+                    "summary": 1,
+                }
+                template = max(scores, key=scores.get)
+                profile_map = {"meeting_notes": "meeting", "tech_doc": "tech_review", "research": "research",
+                               "weekly_report": "general", "summary": "general"}
+                extraction_profile = profile_map.get(template, "general")
+                use_langextract = scores[template] >= 3
+
+                await response.write(f"data: {json.dumps({'type': 'auto_selected', 'template': template, 'extraction_profile': extraction_profile, 'use_langextract': use_langextract, 'scores': scores})}\n\n".encode())
 
             # Step 2: Optional LangExtract
             combined = self.processor._combine_contents(contents)

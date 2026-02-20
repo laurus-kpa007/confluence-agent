@@ -268,9 +268,9 @@
         <ul class="source-list" id="sourceList"></ul>
 
         <div class="option-group">
-          <label>📝 템플릿</label>
+          <label>📝 템플릿 <span id="templateAutoLabel" style="font-size:0.75em; color:var(--success);">(자동)</span></label>
           <div style="display:flex; gap:8px;">
-            <select id="templateSelect" style="flex:1;"></select>
+            <select id="templateSelect" style="flex:1;" onchange="onTemplateManualChange()"></select>
             <button class="btn btn-secondary" onclick="openTemplateEditor()" title="템플릿 편집">✏️</button>
           </div>
         </div>
@@ -312,10 +312,10 @@
         </div>
 
         <div class="option-group">
-          <label>🔬 LangExtract 구조화 추출</label>
+          <label>🔬 LangExtract 구조화 추출 <span id="extractAutoLabel" style="font-size:0.75em; color:var(--success);">(자동)</span></label>
           <div style="display:flex; gap:8px; align-items:center;">
-            <input type="checkbox" id="useLangExtract" style="width:auto;">
-            <select id="extractProfile" style="flex:1;">
+            <input type="checkbox" id="useLangExtract" style="width:auto;" onchange="onExtractManualChange()">
+            <select id="extractProfile" style="flex:1;" onchange="onExtractManualChange()">
               <option value="general">일반</option>
               <option value="meeting">회의록</option>
               <option value="tech_review">기술 리뷰</option>
@@ -445,6 +445,30 @@
     let sources = [];
     let generatedBody = '';
     let publishFormat = 'markdown';
+    let templateAutoMode = true;
+    let extractAutoMode = true;
+
+    // --- Auto/Manual selection ---
+    function onTemplateManualChange() {
+      templateAutoMode = false;
+      document.getElementById('templateAutoLabel').textContent = '(수동)';
+      document.getElementById('templateAutoLabel').style.color = 'var(--text2)';
+    }
+
+    function onExtractManualChange() {
+      extractAutoMode = false;
+      document.getElementById('extractAutoLabel').textContent = '(수동)';
+      document.getElementById('extractAutoLabel').style.color = 'var(--text2)';
+    }
+
+    function resetAutoMode() {
+      templateAutoMode = true;
+      extractAutoMode = true;
+      document.getElementById('templateAutoLabel').textContent = '(자동)';
+      document.getElementById('templateAutoLabel').style.color = 'var(--success)';
+      document.getElementById('extractAutoLabel').textContent = '(자동)';
+      document.getElementById('extractAutoLabel').style.color = 'var(--success)';
+    }
 
     // --- Sources ---
     function addSource() {
@@ -454,11 +478,15 @@
       sources.push(val);
       input.value = '';
       renderSources();
+      // Reset to auto mode when sources change
+      resetAutoMode();
     }
 
     function removeSource(i) {
       sources.splice(i, 1);
       renderSources();
+      // Reset to auto mode when sources change
+      resetAutoMode();
     }
 
     function detectType(s) {
@@ -531,6 +559,10 @@
       const extractProfile = document.getElementById('extractProfile').value;
       const outputLength = document.getElementById('lengthSelect').value;
       const outputLanguage = document.getElementById('outputLanguage').value;
+      const autoSelect = templateAutoMode || extractAutoMode;
+
+      // Clear title for fresh auto-fill from generated content
+      document.getElementById('pageTitle').value = '';
 
       const startTime = Date.now();
       generatedBody = '';
@@ -557,6 +589,7 @@
             extraction_profile: extractProfile,
             output_length: outputLength,
             output_language: outputLanguage,
+            auto_select: autoSelect,
           }),
         });
 
@@ -601,11 +634,22 @@
                 }
                 break;
 
-              case 'title':
-                // Auto-fill title from source
-                const titleInput = document.getElementById('pageTitle');
-                if (!titleInput.value.trim() && event.title) {
-                  titleInput.value = event.title;
+              case 'auto_selected':
+                // Update UI to reflect auto-selected values
+                if (templateAutoMode && event.template) {
+                  const tmplSel = document.getElementById('templateSelect');
+                  if (tmplSel.querySelector(`option[value="${event.template}"]`)) {
+                    tmplSel.value = event.template;
+                  }
+                }
+                if (extractAutoMode) {
+                  if (event.extraction_profile) {
+                    const profSel = document.getElementById('extractProfile');
+                    if (profSel.querySelector(`option[value="${event.extraction_profile}"]`)) {
+                      profSel.value = event.extraction_profile;
+                    }
+                  }
+                  document.getElementById('useLangExtract').checked = !!event.use_langextract;
                 }
                 break;
 
