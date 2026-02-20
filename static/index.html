@@ -241,6 +241,32 @@
       resize: vertical;
     }
     .modal .btn-group { justify-content: flex-end; }
+
+    /* Refine chat bar */
+    .refine-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 16px; background: var(--surface);
+      border-radius: 12px; margin-top: 8px;
+    }
+    .refine-bar input {
+      flex: 1; padding: 8px 12px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 0.9em;
+    }
+    .refine-bar input:focus { outline: none; border-color: var(--accent); }
+    .refine-bar input:disabled { opacity: 0.5; }
+    .refine-history {
+      display: flex; gap: 6px; flex-wrap: wrap;
+      padding: 0 4px; margin-top: 4px;
+    }
+    .refine-chip {
+      font-size: 0.7em; padding: 3px 10px;
+      background: var(--surface2); border-radius: 12px;
+      color: var(--text2); cursor: pointer; white-space: nowrap;
+      border: 1px solid transparent;
+    }
+    .refine-chip:hover { border-color: var(--accent); color: var(--text); }
+    .refine-chip.active { background: var(--accent2); color: white; }
   </style>
 </head>
 <body>
@@ -366,6 +392,20 @@
             <textarea id="sourceEditor" placeholder="생성된 마크다운/XHTML이 여기에 표시됩니다. 직접 편집 가능합니다."></textarea>
           </div>
         </div>
+
+        <!-- Refine chat bar -->
+        <div class="refine-bar" id="refineBar" style="display:none;">
+          <span style="font-size:0.85em; color:var(--text2); white-space:nowrap;">💬 수정지시</span>
+          <input type="text" id="refineInput" placeholder="예: 표를 추가해줘, 3번 항목을 더 자세히, 결론 부분 삭제..."
+                 onkeydown="if(event.key==='Enter' && !event.shiftKey) refineContent()">
+          <button class="btn btn-primary" onclick="refineContent()" id="refineBtn" style="padding:8px 16px;">
+            수정
+          </button>
+          <button class="btn btn-secondary" onclick="undoRefine()" id="undoBtn" style="padding:8px 12px; font-size:0.85em;" disabled title="이전 버전으로 되돌리기">
+            ↩
+          </button>
+        </div>
+        <div class="refine-history" id="refineHistory"></div>
 
         <!-- Publish bar -->
         <div class="publish-bar publish-section" style="flex-wrap:wrap;">
@@ -575,6 +615,10 @@
       document.querySelector('.preview-tab').classList.add('active');
       previewDiv.innerHTML = '<p style="color: var(--text2);">생성 준비 중...</p>';
 
+      // Hide refine bar during generation
+      document.getElementById('refineBar').style.display = 'none';
+      document.getElementById('refineHistory').innerHTML = '';
+
       updateProgress(1, 4, '📥 소스에서 텍스트 추출 중...');
 
       try {
@@ -685,6 +729,12 @@
         document.getElementById('copyBtn').disabled = false;
         document.getElementById('downloadBtn').disabled = false;
 
+        // Show refine bar and reset history
+        document.getElementById('refineBar').style.display = '';
+        refineHistoryStack = [];
+        document.getElementById('undoBtn').disabled = true;
+        document.getElementById('refineHistory').innerHTML = '';
+
         // Auto-fill title from body if not already set
         autoFillTitle(generatedBody);
 
@@ -787,6 +837,130 @@
       } catch (e) {
         setStatus('error', '❌ 다운로드 실패: ' + e.message);
       }
+    }
+
+    // --- Refine (conversational edit) ---
+    let refineHistoryStack = [];  // [{body, instruction}]
+
+    async function refineContent() {
+      const input = document.getElementById('refineInput');
+      const instruction = input.value.trim();
+      if (!instruction || !generatedBody) return;
+
+      const btn = document.getElementById('refineBtn');
+      btn.disabled = true;
+      input.disabled = true;
+
+      // Save current version for undo
+      refineHistoryStack.push({ body: generatedBody, instruction });
+      document.getElementById('undoBtn').disabled = false;
+
+      const format = document.getElementById('formatSelect').value;
+      const outputLanguage = document.getElementById('outputLanguage').value;
+
+      setStatus('loading', '💬 수정 중...');
+
+      try {
+        const resp = await fetch('/api/refine_stream', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            body: generatedBody,
+            instruction,
+            format,
+            output_language: outputLanguage,
+          }),
+        });
+
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error(`서버 오류 (${resp.status}): ${text.substring(0, 200)}`);
+        }
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        generatedBody = '';
+
+        const previewDiv = document.getElementById('previewRendered');
+        document.getElementById('previewRendered').style.display = '';
+        document.getElementById('previewSource').style.display = 'none';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const messages = buffer.split('\n\n');
+          buffer = messages.pop();
+
+          for (const msg of messages) {
+            if (!msg.startsWith('data: ')) continue;
+            let event;
+            try { event = JSON.parse(msg.slice(6)); } catch { continue; }
+
+            switch (event.type) {
+              case 'chunk':
+                generatedBody += event.text;
+                renderStreamingPreview(generatedBody, format);
+                break;
+              case 'replace':
+                generatedBody = event.text;
+                renderStreamingPreview(generatedBody, format);
+                break;
+              case 'done':
+                break;
+              case 'error':
+                throw new Error(event.error);
+            }
+          }
+        }
+
+        // Final render
+        renderStreamingPreview(generatedBody, format);
+        document.getElementById('sourceEditor').value = generatedBody;
+        autoFillTitle(generatedBody);
+        renderRefineHistory();
+
+        input.value = '';
+        setStatus('success', `✅ 수정 완료 (${refineHistoryStack.length}번째 수정)`);
+      } catch (e) {
+        // Restore on error
+        if (refineHistoryStack.length > 0) {
+          const last = refineHistoryStack.pop();
+          generatedBody = last.body;
+          renderStreamingPreview(generatedBody, format);
+        }
+        setStatus('error', `❌ 수정 오류: ${e.message}`);
+      }
+
+      btn.disabled = false;
+      input.disabled = false;
+      input.focus();
+    }
+
+    function undoRefine() {
+      if (refineHistoryStack.length === 0) return;
+      const prev = refineHistoryStack.pop();
+      generatedBody = prev.body;
+      const format = document.getElementById('formatSelect').value;
+      renderStreamingPreview(generatedBody, format);
+      document.getElementById('sourceEditor').value = generatedBody;
+      autoFillTitle(generatedBody);
+      renderRefineHistory();
+      document.getElementById('undoBtn').disabled = refineHistoryStack.length === 0;
+      setStatus('success', '↩ 이전 버전으로 복원됨');
+    }
+
+    function renderRefineHistory() {
+      const container = document.getElementById('refineHistory');
+      if (refineHistoryStack.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+      container.innerHTML = refineHistoryStack.map((item, i) =>
+        `<span class="refine-chip" title="${item.instruction}">#${i + 1} ${item.instruction.length > 20 ? item.instruction.slice(0, 20) + '...' : item.instruction}</span>`
+      ).join('');
     }
 
     // --- Auto Title ---
