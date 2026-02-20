@@ -57,6 +57,7 @@ class WebUI:
         self.app.router.add_post("/api/analyze_sources", self._analyze_sources)
         self.app.router.add_post("/api/process", self._process)
         self.app.router.add_post("/api/process_stream", self._process_stream)
+        self.app.router.add_post("/api/refine_stream", self._refine_stream)
         self.app.router.add_post("/api/publish", self._publish)
         self.app.router.add_post("/api/extract_viz", self._extract_visualize)
         self.app.router.add_post("/api/extract_entities", self._extract_entities)
@@ -358,6 +359,80 @@ class WebUI:
                     "error_type": type(e).__name__,
                 }, status=500)
             # Otherwise try to send error event
+            try:
+                await response.write(f"data: {json.dumps({'type': 'error', 'error': error_msg})}\n\n".encode())
+                await response.write_eof()
+            except Exception:
+                pass
+            return response
+
+    async def _refine_stream(self, request):
+        """Refine existing content based on user instruction, streaming via SSE."""
+        response = None
+        try:
+            data = await request.json()
+            current_body = data.get("body", "")
+            instruction = data.get("instruction", "")
+            output_format = data.get("format", "markdown")
+            output_language = data.get("output_language", "ko")
+
+            if not current_body or not instruction:
+                return web.json_response({"error": "body and instruction are required"}, status=400)
+
+            response = web.StreamResponse(
+                status=200,
+                reason='OK',
+                headers={
+                    'Content-Type': 'text/event-stream',
+                    'Cache-Control': 'no-cache',
+                    'Connection': 'keep-alive',
+                    'X-Accel-Buffering': 'no',
+                },
+            )
+            await response.prepare(request)
+
+            await response.write(f"data: {json.dumps({'type': 'status', 'message': '수정 중...'})}\n\n".encode())
+
+            # Build refinement prompt
+            fmt = "Confluence Storage Format XHTML" if output_format == "confluence" else "마크다운"
+            lang_map = {"ko": "한국어", "en": "English", "ja": "日本語", "zh": "中文"}
+            lang = lang_map.get(output_language, "한국어")
+
+            prompt = f"""아래 문서를 사용자의 지시에 따라 수정해주세요.
+
+**출력 형식**: {fmt}
+**출력 언어**: {lang}
+**중요**: 수정된 전체 문서를 출력하세요. 변경된 부분만이 아니라 전체 내용을 반환해야 합니다.
+
+## 사용자 수정 지시
+{instruction}
+
+## 현재 문서
+{current_body}"""
+
+            full_body = ""
+            async for chunk in self.processor.stream_llm(prompt):
+                full_body += chunk
+                await response.write(f"data: {json.dumps({'type': 'chunk', 'text': chunk})}\n\n".encode())
+
+            # Clean wiki macros if confluence format
+            if output_format == "confluence":
+                cleaned = self._clean_confluence_macros(full_body)
+                if cleaned != full_body:
+                    full_body = cleaned
+                    await response.write(f"data: {json.dumps({'type': 'replace', 'text': full_body})}\n\n".encode())
+
+            await response.write(f"data: {json.dumps({'type': 'done'})}\n\n".encode())
+            await response.write_eof()
+            return response
+
+        except Exception as e:
+            import traceback
+            error_msg = str(e) if str(e) else f"{type(e).__name__}: (no message)"
+            print(f"Refine error: {error_msg}")
+            print(traceback.format_exc())
+            if response is None or not response.prepared:
+                return web.json_response({"error": error_msg}, status=500)
             try:
                 await response.write(f"data: {json.dumps({'type': 'error', 'error': error_msg})}\n\n".encode())
                 await response.write_eof()
