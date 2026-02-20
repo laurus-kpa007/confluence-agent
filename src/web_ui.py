@@ -367,7 +367,12 @@ class WebUI:
             return response
 
     async def _refine_stream(self, request):
-        """Refine existing content based on user instruction, streaming via SSE."""
+        """Refine existing content based on user instruction, streaming via SSE.
+
+        Two modes detected automatically:
+        - content-only: simple wording/structure changes (no source re-read)
+        - source-aware: needs original sources for additional info or deeper analysis
+        """
         response = None
         try:
             data = await request.json()
@@ -375,9 +380,21 @@ class WebUI:
             instruction = data.get("instruction", "")
             output_format = data.get("format", "markdown")
             output_language = data.get("output_language", "ko")
+            request_sources = data.get("sources", [])
 
             if not current_body or not instruction:
                 return web.json_response({"error": "body and instruction are required"}, status=400)
+
+            # Detect if instruction needs source re-analysis
+            source_kw = [
+                "자료", "소스", "원본", "출처", "조사", "검색", "찾아", "추가 정보",
+                "더 자세히", "더 상세", "더 깊이", "보충", "근거", "데이터",
+                "누락", "빠진", "빠뜨린", "놓친", "확인해",
+                "source", "research", "find", "search", "missing", "add more",
+                "evidence", "reference", "detail from",
+            ]
+            instruction_lower = instruction.lower()
+            needs_sources = any(kw in instruction_lower for kw in source_kw)
 
             response = web.StreamResponse(
                 status=200,
@@ -391,14 +408,47 @@ class WebUI:
             )
             await response.prepare(request)
 
-            await response.write(f"data: {json.dumps({'type': 'status', 'message': '수정 중...'})}\n\n".encode())
-
             # Build refinement prompt
             fmt = "Confluence Storage Format XHTML" if output_format == "confluence" else "마크다운"
             lang_map = {"ko": "한국어", "en": "English", "ja": "日本語", "zh": "中文"}
             lang = lang_map.get(output_language, "한국어")
 
-            prompt = f"""아래 문서를 사용자의 지시에 따라 수정해주세요.
+            source_context = ""
+            if needs_sources and request_sources:
+                mode = "source"
+                await response.write(f"data: {json.dumps({'type': 'status', 'message': '소스 자료 재분석 중...', 'mode': 'source'})}\n\n".encode())
+
+                try:
+                    contents = await self.router.extract_many(request_sources)
+                    source_context = self.processor._combine_contents(contents)
+                    # Trim to reasonable size for context window
+                    if len(source_context) > 8000:
+                        source_context = source_context[:8000] + "\n\n... (이하 생략)"
+                except Exception as e:
+                    source_context = f"[소스 재추출 실패: {e}]"
+
+                await response.write(f"data: {json.dumps({'type': 'status', 'message': '소스 기반 수정 중...'})}\n\n".encode())
+
+                prompt = f"""아래 문서를 사용자의 지시에 따라 수정해주세요.
+원본 소스 자료를 참고하여 누락된 정보를 보충하거나 더 정확한 내용으로 수정하세요.
+
+**출력 형식**: {fmt}
+**출력 언어**: {lang}
+**중요**: 수정된 전체 문서를 출력하세요. 변경된 부분만이 아니라 전체 내용을 반환해야 합니다.
+
+## 사용자 수정 지시
+{instruction}
+
+## 원본 소스 자료
+{source_context}
+
+## 현재 문서
+{current_body}"""
+            else:
+                mode = "edit"
+                await response.write(f"data: {json.dumps({'type': 'status', 'message': '내용 수정 중...', 'mode': 'edit'})}\n\n".encode())
+
+                prompt = f"""아래 문서를 사용자의 지시에 따라 수정해주세요.
 
 **출력 형식**: {fmt}
 **출력 언어**: {lang}
@@ -422,7 +472,7 @@ class WebUI:
                     full_body = cleaned
                     await response.write(f"data: {json.dumps({'type': 'replace', 'text': full_body})}\n\n".encode())
 
-            await response.write(f"data: {json.dumps({'type': 'done'})}\n\n".encode())
+            await response.write(f"data: {json.dumps({'type': 'done', 'mode': mode})}\n\n".encode())
             await response.write_eof()
             return response
 

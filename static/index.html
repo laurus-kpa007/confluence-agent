@@ -852,11 +852,12 @@
       input.disabled = true;
 
       // Save current version for undo
-      refineHistoryStack.push({ body: generatedBody, instruction });
+      refineHistoryStack.push({ body: generatedBody, instruction, mode: null });
       document.getElementById('undoBtn').disabled = false;
 
       const format = document.getElementById('formatSelect').value;
       const outputLanguage = document.getElementById('outputLanguage').value;
+      let refineMode = 'edit';
 
       setStatus('loading', '💬 수정 중...');
 
@@ -869,6 +870,7 @@
             instruction,
             format,
             output_language: outputLanguage,
+            sources,
           }),
         });
 
@@ -900,6 +902,13 @@
             try { event = JSON.parse(msg.slice(6)); } catch { continue; }
 
             switch (event.type) {
+              case 'status':
+                if (event.mode === 'source') {
+                  setStatus('loading', '📥 소스 자료 재분석 후 수정 중...');
+                } else {
+                  setStatus('loading', '💬 ' + (event.message || '수정 중...'));
+                }
+                break;
               case 'chunk':
                 generatedBody += event.text;
                 renderStreamingPreview(generatedBody, format);
@@ -909,6 +918,7 @@
                 renderStreamingPreview(generatedBody, format);
                 break;
               case 'done':
+                refineMode = event.mode || 'edit';
                 break;
               case 'error':
                 throw new Error(event.error);
@@ -920,10 +930,15 @@
         renderStreamingPreview(generatedBody, format);
         document.getElementById('sourceEditor').value = generatedBody;
         autoFillTitle(generatedBody);
+        // Update the last history entry with detected mode
+        if (refineHistoryStack.length > 0) {
+          refineHistoryStack[refineHistoryStack.length - 1].mode = refineMode;
+        }
         renderRefineHistory();
 
         input.value = '';
-        setStatus('success', `✅ 수정 완료 (${refineHistoryStack.length}번째 수정)`);
+        const modeLabel = refineMode === 'source' ? '📥 소스 재참조' : '✏️ 내용 수정';
+        setStatus('success', `✅ 수정 완료 [${modeLabel}] (${refineHistoryStack.length}번째 수정)`);
       } catch (e) {
         // Restore on error
         if (refineHistoryStack.length > 0) {
@@ -958,9 +973,11 @@
         container.innerHTML = '';
         return;
       }
-      container.innerHTML = refineHistoryStack.map((item, i) =>
-        `<span class="refine-chip" title="${item.instruction}">#${i + 1} ${item.instruction.length > 20 ? item.instruction.slice(0, 20) + '...' : item.instruction}</span>`
-      ).join('');
+      container.innerHTML = refineHistoryStack.map((item, i) => {
+        const icon = item.mode === 'source' ? '📥' : '✏️';
+        const text = item.instruction.length > 20 ? item.instruction.slice(0, 20) + '...' : item.instruction;
+        return `<span class="refine-chip" title="${item.instruction}">${icon} #${i + 1} ${text}</span>`;
+      }).join('');
     }
 
     // --- Auto Title ---
