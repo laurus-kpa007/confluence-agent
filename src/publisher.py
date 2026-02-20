@@ -17,11 +17,16 @@ class ConfluencePublisher:
         if self.auth_type == "bearer":
             # Confluence Server/Data Center with Personal Access Token (PAT)
             self.auth = None
-            self._extra_headers = {"Authorization": f"Bearer {api_token}"}
+            self._extra_headers = {
+                "Authorization": f"Bearer {api_token}",
+                "X-Atlassian-Token": "no-check",
+            }
         else:
             # Atlassian Cloud: Basic Auth (email:api_token)
             self.auth = (username, api_token)
-            self._extra_headers = {}
+            self._extra_headers = {
+                "X-Atlassian-Token": "no-check",
+            }
 
         logger.debug("ConfluencePublisher init: url=%s, username=%s, auth_type=%s, ssl_verify=%s",
                       self.url, username, self.auth_type, ssl_verify)
@@ -32,15 +37,32 @@ class ConfluencePublisher:
             merged.update(headers)
         return merged
 
+    def _check_html_response(self, resp: httpx.Response):
+        """Detect when Confluence returns HTML login page instead of JSON."""
+        content_type = resp.headers.get("content-type", "")
+        if "text/html" in content_type and resp.status_code < 400:
+            # Confluence Server redirected to login page (auth failure disguised as 200)
+            raise ConfluenceAuthError(
+                "Confluence가 로그인 페이지를 반환했습니다. "
+                "인증 설정을 확인하세요:\n"
+                "  - Server/DC 개인 토큰(PAT): CONFLUENCE_AUTH_TYPE=bearer\n"
+                "  - Basic Auth가 서버에서 비활성화되었을 수 있습니다"
+            )
+
     async def list_spaces(self, limit: int = 50) -> List[dict]:
         """List all accessible spaces."""
+        url = f"{self.url}/rest/api/space"
+        logger.debug("GET %s (ssl_verify=%s, auth_type=%s)", url, self.ssl_verify, self.auth_type)
         async with httpx.AsyncClient(timeout=15.0, verify=self.ssl_verify) as client:
             resp = await client.get(
-                f"{self.url}/rest/api/space",
+                url,
                 params={"limit": limit, "type": "global"},
                 auth=self.auth,
                 headers=self._merge_headers(),
             )
+            logger.debug("list_spaces response: status=%d, content-type=%s",
+                         resp.status_code, resp.headers.get("content-type", ""))
+            self._check_html_response(resp)
             resp.raise_for_status()
             return [
                 {"key": s["key"], "name": s["name"], "id": s.get("id")}
@@ -51,15 +73,17 @@ class ConfluencePublisher:
         """List pages in a space, optionally under a parent."""
         async with httpx.AsyncClient(timeout=15.0, verify=self.ssl_verify) as client:
             if parent_id:
+                url = f"{self.url}/rest/api/content/{parent_id}/child/page"
                 resp = await client.get(
-                    f"{self.url}/rest/api/content/{parent_id}/child/page",
+                    url,
                     params={"limit": limit, "expand": "version"},
                     auth=self.auth,
                     headers=self._merge_headers(),
                 )
             else:
+                url = f"{self.url}/rest/api/content"
                 resp = await client.get(
-                    f"{self.url}/rest/api/content",
+                    url,
                     params={
                         "spaceKey": space_key,
                         "type": "page",
@@ -69,6 +93,8 @@ class ConfluencePublisher:
                     auth=self.auth,
                     headers=self._merge_headers(),
                 )
+            logger.debug("list_pages response: status=%d, url=%s", resp.status_code, url)
+            self._check_html_response(resp)
             resp.raise_for_status()
             results = resp.json().get("results", [])
             pages = []
@@ -94,6 +120,7 @@ class ConfluencePublisher:
                 auth=self.auth,
                 headers=self._merge_headers(),
             )
+            self._check_html_response(resp)
             resp.raise_for_status()
             return [
                 {
@@ -150,6 +177,7 @@ class ConfluencePublisher:
                 headers=self._merge_headers({"Content-Type": "application/json"}),
             )
             logger.debug("Create page response: status=%d", resp.status_code)
+            self._check_html_response(resp)
             resp.raise_for_status()
             result = resp.json()
             logger.info("Page created: id=%s, title=%s", result["id"], result["title"])
@@ -173,6 +201,7 @@ class ConfluencePublisher:
                 auth=self.auth,
                 headers=self._merge_headers(),
             )
+            self._check_html_response(resp)
             resp.raise_for_status()
             current = resp.json()
             version = current["version"]["number"] + 1
@@ -194,6 +223,7 @@ class ConfluencePublisher:
                 auth=self.auth,
                 headers=self._merge_headers({"Content-Type": "application/json"}),
             )
+            self._check_html_response(resp)
             resp.raise_for_status()
             result = resp.json()
             return {
@@ -201,3 +231,8 @@ class ConfluencePublisher:
                 "title": result["title"],
                 "url": f"{self.url}{result['_links']['webui']}",
             }
+
+
+class ConfluenceAuthError(Exception):
+    """Raised when Confluence returns a login page instead of API response."""
+    pass
