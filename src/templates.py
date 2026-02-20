@@ -108,8 +108,15 @@ DEFAULT_TEMPLATES = {
 
 # Format instructions by output type
 FORMAT_INSTRUCTIONS = {
-    "confluence": "Confluence Storage Format (XHTML)으로 출력. <h2>, <table>, <ac:structured-macro> 등 사용",
-    "markdown": "마크다운 형식으로 출력. ##, |테이블|, ```코드블록``` 등 사용",
+    "confluence": """Confluence Storage Format (XHTML)으로 출력하세요.
+반드시 먼저 <h1>으로 전체 문서의 제목을 작성하세요.
+사용할 태그: <h1>, <h2>, <h3>, <p>, <ul>, <ol>, <li>, <table>, <tbody>, <tr>, <th>, <td>, <strong>, <em>, <a>, <code>, <hr />
+코드 블록은 반드시 이 형식으로: <ac:structured-macro ac:name="code"><ac:parameter ac:name="language">언어</ac:parameter><ac:plain-text-body><![CDATA[코드]]></ac:plain-text-body></ac:structured-macro>
+절대 사용 금지: {code}, {panel}, {note}, {info}, {warning}, {tip}, {toc}, {excerpt}, {noformat} 등 위키 마크업 매크로 문법""",
+    "markdown": """마크다운 형식으로 출력하세요.
+반드시 먼저 # 으로 전체 문서의 제목을 작성하세요.
+사용할 문법: # 제목, ## 소제목, **굵게**, *기울임*, `인라인코드`, ```코드블록```, |테이블|, - 목록, 1. 번호목록
+절대 사용 금지: {code}, {panel}, {note} 등 Confluence 위키 매크로 문법""",
 }
 
 

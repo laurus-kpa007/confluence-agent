@@ -518,33 +518,35 @@
       setStatus('success', `템플릿 "${name}" 저장 완료`);
     }
 
-    // --- Process ---
+    // --- Process (Streaming) ---
     async function processAll() {
       if (!sources.length) return;
 
       const btn = document.getElementById('processBtn');
       btn.disabled = true;
 
+      const template = document.getElementById('templateSelect').value;
+      const format = document.getElementById('formatSelect').value;
+      const useLangExtract = document.getElementById('useLangExtract').checked;
+      const extractProfile = document.getElementById('extractProfile').value;
+      const outputLength = document.getElementById('lengthSelect').value;
+      const outputLanguage = document.getElementById('outputLanguage').value;
+
+      const startTime = Date.now();
+      generatedBody = '';
+
+      // Switch to preview tab and clear
+      const previewDiv = document.getElementById('previewRendered');
+      document.getElementById('previewRendered').style.display = '';
+      document.getElementById('previewSource').style.display = 'none';
+      document.querySelectorAll('.preview-tab').forEach(t => t.classList.remove('active'));
+      document.querySelector('.preview-tab').classList.add('active');
+      previewDiv.innerHTML = '<p style="color: var(--text2);">생성 준비 중...</p>';
+
+      updateProgress(1, 4, '📥 소스에서 텍스트 추출 중...');
+
       try {
-        const template = document.getElementById('templateSelect').value;
-        const format = document.getElementById('formatSelect').value;
-        const useLangExtract = document.getElementById('useLangExtract').checked;
-        const extractProfile = document.getElementById('extractProfile').value;
-
-        // Step 1: Extracting sources
-        updateProgress(1, 3, '📥 소스에서 텍스트 추출 중...');
-
-        // Simulate progress (since we can't track real server progress)
-        const progressInterval = setInterval(() => {
-          // This will be cleared when response arrives
-        }, 100);
-
-        const startTime = Date.now();
-
-        const outputLength = document.getElementById('lengthSelect').value;
-        const outputLanguage = document.getElementById('outputLanguage').value;
-
-        const resp = await fetch('/api/process', {
+        const resp = await fetch('/api/process_stream', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
@@ -554,43 +556,118 @@
             use_langextract: useLangExtract,
             extraction_profile: extractProfile,
             output_length: outputLength,
-            output_language: outputLanguage
+            output_language: outputLanguage,
           }),
         });
-
-        clearInterval(progressInterval);
 
         if (!resp.ok) {
           const text = await resp.text();
           throw new Error(`서버 오류 (${resp.status}): ${text.substring(0, 200)}`);
         }
 
-        // Step 2: Processing with LLM
-        updateProgress(2, 3, '🤖 LLM으로 정리 중...');
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let streamStarted = false;
+        let sourcesCount = 0;
 
-        const data = await resp.json();
-        generatedBody = data.body;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        // Step 3: Formatting
-        updateProgress(3, 3, '✨ 최종 포맷팅 중...');
+          buffer += decoder.decode(value, { stream: true });
 
-        // Update preview
-        updatePreview();
+          // Process complete SSE messages
+          const messages = buffer.split('\n\n');
+          buffer = messages.pop(); // Keep incomplete message in buffer
+
+          for (const msg of messages) {
+            if (!msg.startsWith('data: ')) continue;
+            const jsonStr = msg.slice(6);
+            let event;
+            try { event = JSON.parse(jsonStr); } catch { continue; }
+
+            switch (event.type) {
+              case 'status':
+                if (event.step === 'extract') {
+                  updateProgress(1, 4, '📥 ' + event.message);
+                } else if (event.step === 'langextract') {
+                  updateProgress(2, 4, '🔬 ' + event.message);
+                } else if (event.step === 'llm') {
+                  updateProgress(3, 4, '🤖 ' + event.message);
+                  // Clear preview for streaming content
+                  previewDiv.innerHTML = '';
+                  streamStarted = true;
+                }
+                break;
+
+              case 'title':
+                // Auto-fill title from source
+                const titleInput = document.getElementById('pageTitle');
+                if (!titleInput.value.trim() && event.title) {
+                  titleInput.value = event.title;
+                }
+                break;
+
+              case 'chunk':
+                generatedBody += event.text;
+                if (streamStarted) {
+                  // Render incrementally
+                  renderStreamingPreview(generatedBody, format);
+                }
+                break;
+
+              case 'replace':
+                // Full replacement after macro cleanup
+                generatedBody = event.text;
+                renderStreamingPreview(generatedBody, format);
+                break;
+
+              case 'done':
+                sourcesCount = event.sources_count;
+                updateProgress(4, 4, '✨ 완료!');
+                break;
+
+              case 'error':
+                throw new Error(event.error);
+            }
+          }
+        }
+
+        // Final update
+        renderStreamingPreview(generatedBody, format);
         document.getElementById('sourceEditor').value = generatedBody;
         document.getElementById('publishBtn').disabled = false;
         document.getElementById('copyBtn').disabled = false;
         document.getElementById('downloadBtn').disabled = false;
 
-        // Auto-fill page title from generated content
+        // Auto-fill title from body if not already set
         autoFillTitle(generatedBody);
 
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-        setStatus('success', `✅ 생성 완료 (${data.sources_count}개 소스, ${generatedBody.length}자, ${elapsed}초 소요)`);
+        setStatus('success', `✅ 생성 완료 (${sourcesCount}개 소스, ${generatedBody.length}자, ${elapsed}초 소요)`);
       } catch (e) {
         setStatus('error', `❌ 오류: ${e.message}`);
       }
 
       btn.disabled = false;
+    }
+
+    // Throttled streaming preview renderer
+    let renderTimeout = null;
+    function renderStreamingPreview(body, format) {
+      if (renderTimeout) return; // Skip if pending render
+      renderTimeout = setTimeout(() => {
+        renderTimeout = null;
+        const div = document.getElementById('previewRendered');
+        if (format === 'markdown') {
+          div.innerHTML = marked.parse(body);
+        } else {
+          div.innerHTML = body;
+        }
+        // Auto-scroll to bottom
+        div.scrollTop = div.scrollHeight;
+      }, 80); // Render at most every 80ms
     }
 
     function updatePreview() {
@@ -675,18 +752,37 @@
       if (titleInput.value.trim()) return;
 
       let title = '';
-      // Try markdown heading: # Title
-      const mdMatch = body.match(/^#\s+(.+)$/m);
-      if (mdMatch) {
-        title = mdMatch[1].replace(/\*\*/g, '').replace(/\*/g, '').trim();
+
+      // Try markdown H1: # Title
+      const mdH1 = body.match(/^#\s+(.+)$/m);
+      if (mdH1) {
+        title = mdH1[1].replace(/\*\*/g, '').replace(/\*/g, '').trim();
       }
-      // Try HTML heading: <h1>Title</h1>
+
+      // Try HTML H1: <h1>Title</h1>
       if (!title) {
-        const htmlMatch = body.match(/<h1[^>]*>(.*?)<\/h1>/i);
-        if (htmlMatch) {
-          title = htmlMatch[1].replace(/<[^>]*>/g, '').trim();
+        const htmlH1 = body.match(/<h1[^>]*>(.*?)<\/h1>/i);
+        if (htmlH1) {
+          title = htmlH1[1].replace(/<[^>]*>/g, '').trim();
         }
       }
+
+      // Fallback: try markdown H2: ## Title
+      if (!title) {
+        const mdH2 = body.match(/^##\s+(.+)$/m);
+        if (mdH2) {
+          title = mdH2[1].replace(/\*\*/g, '').replace(/\*/g, '').trim();
+        }
+      }
+
+      // Fallback: try HTML H2: <h2>Title</h2>
+      if (!title) {
+        const htmlH2 = body.match(/<h2[^>]*>(.*?)<\/h2>/i);
+        if (htmlH2) {
+          title = htmlH2[1].replace(/<[^>]*>/g, '').trim();
+        }
+      }
+
       if (title) {
         titleInput.value = title;
       }
@@ -783,9 +879,10 @@
     function updateProgress(currentStep, totalSteps, stepName) {
       const percent = Math.round((currentStep / totalSteps) * 100);
       const steps = [
-        { text: '1. 소스 추출 중...', status: currentStep > 1 ? 'done' : currentStep === 1 ? 'active' : 'pending' },
-        { text: '2. LLM 처리 중...', status: currentStep > 2 ? 'done' : currentStep === 2 ? 'active' : 'pending' },
-        { text: '3. 포맷팅 중...', status: currentStep > 3 ? 'done' : currentStep === 3 ? 'active' : 'pending' },
+        { text: '1. 소스 추출', status: currentStep > 1 ? 'done' : currentStep === 1 ? 'active' : 'pending' },
+        { text: '2. 구조화 분석', status: currentStep > 2 ? 'done' : currentStep === 2 ? 'active' : 'pending' },
+        { text: '3. LLM 생성 (스트리밍)', status: currentStep > 3 ? 'done' : currentStep === 3 ? 'active' : 'pending' },
+        { text: '4. 완료', status: currentStep > 4 ? 'done' : currentStep === 4 ? 'active' : 'pending' },
       ];
 
       setStatus('loading', stepName, { percent, steps });

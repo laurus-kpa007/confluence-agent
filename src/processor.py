@@ -1,6 +1,7 @@
 """LLM processor - takes extracted content and generates Confluence-formatted output."""
+import json
 import logging
-from typing import List, Optional
+from typing import AsyncIterator, List, Optional
 import httpx
 
 from .adapters.base import SourceContent
@@ -149,3 +150,82 @@ class LLMProcessor:
             result = resp.json()["content"][0]["text"]
             logger.debug("Anthropic result length: %d chars", len(result))
             return result
+
+    # --- Streaming methods ---
+
+    async def stream_llm(self, prompt: str) -> AsyncIterator[str]:
+        """Stream LLM response chunk by chunk."""
+        if self.provider == "ollama":
+            async for chunk in self._stream_ollama(prompt):
+                yield chunk
+        elif self.provider == "anthropic":
+            async for chunk in self._stream_anthropic(prompt):
+                yield chunk
+        else:
+            raise ValueError(f"Unknown provider: {self.provider}")
+
+    async def _stream_ollama(self, prompt: str) -> AsyncIterator[str]:
+        """Stream from Ollama using /v1/chat/completions with stream=True."""
+        url = f"{self.base_url}/v1/chat/completions"
+        logger.debug("Streaming Ollama: %s model=%s", url, self.model)
+        async with httpx.AsyncClient(timeout=300.0, verify=self.ssl_verify) as client:
+            async with client.stream(
+                "POST",
+                url,
+                json={
+                    "model": self.model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "stream": True,
+                    "temperature": 0.3,
+                },
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    data = line[6:]
+                    if data.strip() == "[DONE]":
+                        break
+                    try:
+                        obj = json.loads(data)
+                        delta = obj.get("choices", [{}])[0].get("delta", {})
+                        content = delta.get("content", "")
+                        if content:
+                            yield content
+                    except (json.JSONDecodeError, IndexError, KeyError):
+                        continue
+
+    async def _stream_anthropic(self, prompt: str) -> AsyncIterator[str]:
+        """Stream from Anthropic using /v1/messages with stream=True."""
+        logger.debug("Streaming Anthropic: model=%s", self.model)
+        async with httpx.AsyncClient(timeout=300.0, verify=self.ssl_verify) as client:
+            async with client.stream(
+                "POST",
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": self.api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": self.model,
+                    "max_tokens": 4096,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "stream": True,
+                },
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    data = line[6:]
+                    if data.strip() == "[DONE]":
+                        break
+                    try:
+                        obj = json.loads(data)
+                        if obj.get("type") == "content_block_delta":
+                            text = obj.get("delta", {}).get("text", "")
+                            if text:
+                                yield text
+                    except (json.JSONDecodeError, KeyError):
+                        continue
