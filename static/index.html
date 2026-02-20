@@ -581,6 +581,9 @@
         document.getElementById('copyBtn').disabled = false;
         document.getElementById('downloadBtn').disabled = false;
 
+        // Auto-fill page title from generated content
+        autoFillTitle(generatedBody);
+
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
         setStatus('success', `✅ 생성 완료 (${data.sources_count}개 소스, ${generatedBody.length}자, ${elapsed}초 소요)`);
       } catch (e) {
@@ -662,6 +665,30 @@
         setStatus('success', `💾 ${filename} 다운로드 완료`);
       } catch (e) {
         setStatus('error', '❌ 다운로드 실패: ' + e.message);
+      }
+    }
+
+    // --- Auto Title ---
+    function autoFillTitle(body) {
+      const titleInput = document.getElementById('pageTitle');
+      // Don't overwrite if user already typed a title
+      if (titleInput.value.trim()) return;
+
+      let title = '';
+      // Try markdown heading: # Title
+      const mdMatch = body.match(/^#\s+(.+)$/m);
+      if (mdMatch) {
+        title = mdMatch[1].replace(/\*\*/g, '').replace(/\*/g, '').trim();
+      }
+      // Try HTML heading: <h1>Title</h1>
+      if (!title) {
+        const htmlMatch = body.match(/<h1[^>]*>(.*?)<\/h1>/i);
+        if (htmlMatch) {
+          title = htmlMatch[1].replace(/<[^>]*>/g, '').trim();
+        }
+      }
+      if (title) {
+        titleInput.value = title;
       }
     }
 

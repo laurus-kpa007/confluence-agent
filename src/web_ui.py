@@ -171,9 +171,9 @@ class WebUI:
         parent_id = data.get("parent_id")
         use_markdown = data.get("use_markdown", False)
 
-        # Wrap in markdown macro if requested
+        # Convert markdown to Confluence storage XHTML if requested
         if use_markdown:
-            body = self._wrap_markdown_macro(body)
+            body = self._markdown_to_confluence_storage(body)
 
         try:
             result = await self.publisher.create_page(
@@ -404,17 +404,130 @@ class WebUI:
         except Exception as e:
             return web.json_response({"error": str(e)}, status=500)
 
-    def _wrap_markdown_macro(self, markdown_text: str) -> str:
-        """Wrap markdown in Confluence markdown macro."""
-        import html
-        escaped = html.escape(markdown_text)
-        return (
-            '<ac:structured-macro ac:name="markdown">'
-            '<ac:plain-text-body>'
-            f'<![CDATA[{markdown_text}]]>'
-            '</ac:plain-text-body>'
-            '</ac:structured-macro>'
-        )
+    def _markdown_to_confluence_storage(self, md_text: str) -> str:
+        """Convert markdown to Confluence storage format (XHTML).
+
+        Converts directly to XHTML instead of relying on the Confluence
+        Markdown macro plugin which may not be installed on Server/DC.
+        """
+        import re
+
+        def inline(text: str) -> str:
+            """Convert inline markdown formatting to HTML."""
+            # Bold
+            text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+            # Italic (avoid matching ** already converted)
+            text = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'<em>\1</em>', text)
+            # Inline code
+            text = re.sub(r'`(.+?)`', r'<code>\1</code>', text)
+            # Links
+            text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', text)
+            return text
+
+        lines = md_text.split('\n')
+        result = []
+        i = 0
+
+        while i < len(lines):
+            line = lines[i]
+            stripped = line.strip()
+
+            # Fenced code block
+            if stripped.startswith('```'):
+                lang = stripped[3:].strip()
+                code_lines = []
+                i += 1
+                while i < len(lines) and not lines[i].strip().startswith('```'):
+                    code_lines.append(lines[i])
+                    i += 1
+                if i < len(lines):
+                    i += 1  # skip closing ```
+                code = '\n'.join(code_lines)
+                macro = '<ac:structured-macro ac:name="code">'
+                if lang:
+                    macro += f'<ac:parameter ac:name="language">{lang}</ac:parameter>'
+                macro += f'<ac:plain-text-body><![CDATA[{code}]]></ac:plain-text-body>'
+                macro += '</ac:structured-macro>'
+                result.append(macro)
+                continue
+
+            # Heading
+            m = re.match(r'^(#{1,6})\s+(.+)$', stripped)
+            if m:
+                level = len(m.group(1))
+                result.append(f'<h{level}>{inline(m.group(2))}</h{level}>')
+                i += 1
+                continue
+
+            # Horizontal rule
+            if re.match(r'^[-*_]{3,}$', stripped):
+                result.append('<hr />')
+                i += 1
+                continue
+
+            # Table
+            if '|' in stripped and i + 1 < len(lines):
+                next_line = lines[i + 1].strip() if i + 1 < len(lines) else ''
+                if re.match(r'^\|[\s\-:|]+\|$', next_line):
+                    headers = [c.strip() for c in stripped.strip('|').split('|')]
+                    i += 2  # skip header + separator
+                    rows = []
+                    while i < len(lines) and '|' in lines[i].strip():
+                        cells = [c.strip() for c in lines[i].strip().strip('|').split('|')]
+                        rows.append(cells)
+                        i += 1
+                    tbl = '<table><tbody><tr>'
+                    tbl += ''.join(f'<th>{inline(h)}</th>' for h in headers)
+                    tbl += '</tr>'
+                    for row in rows:
+                        tbl += '<tr>' + ''.join(f'<td>{inline(c)}</td>' for c in row) + '</tr>'
+                    tbl += '</tbody></table>'
+                    result.append(tbl)
+                    continue
+
+            # Unordered list
+            if re.match(r'^[-*+]\s', stripped):
+                items = []
+                while i < len(lines) and re.match(r'^\s*[-*+]\s', lines[i]):
+                    item_text = re.sub(r'^\s*[-*+]\s+', '', lines[i])
+                    items.append(f'<li>{inline(item_text)}</li>')
+                    i += 1
+                result.append('<ul>' + ''.join(items) + '</ul>')
+                continue
+
+            # Ordered list
+            if re.match(r'^\d+\.\s', stripped):
+                items = []
+                while i < len(lines) and re.match(r'^\s*\d+\.\s', lines[i]):
+                    item_text = re.sub(r'^\s*\d+\.\s+', '', lines[i])
+                    items.append(f'<li>{inline(item_text)}</li>')
+                    i += 1
+                result.append('<ol>' + ''.join(items) + '</ol>')
+                continue
+
+            # Empty line
+            if not stripped:
+                i += 1
+                continue
+
+            # Paragraph: collect consecutive non-special lines
+            para = []
+            while i < len(lines):
+                ln = lines[i].strip()
+                if (not ln or ln.startswith('#') or ln.startswith('```')
+                        or re.match(r'^[-*_]{3,}$', ln)
+                        or re.match(r'^[-*+]\s', ln)
+                        or re.match(r'^\d+\.\s', ln)):
+                    break
+                # Check table start
+                if '|' in ln and i + 1 < len(lines) and re.match(r'^\|[\s\-:|]+\|$', lines[i + 1].strip()):
+                    break
+                para.append(ln)
+                i += 1
+            if para:
+                result.append(f'<p>{inline(" ".join(para))}</p>')
+
+        return '\n'.join(result)
 
     def run(self, host: str = "127.0.0.1", port: int = 8501):
         import sys
