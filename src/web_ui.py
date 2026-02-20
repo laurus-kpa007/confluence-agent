@@ -55,6 +55,7 @@ class WebUI:
         self.app.router.add_post("/api/templates", self._create_template)
         self.app.router.add_post("/api/extract", self._extract)
         self.app.router.add_post("/api/process", self._process)
+        self.app.router.add_post("/api/process_stream", self._process_stream)
         self.app.router.add_post("/api/publish", self._publish)
         self.app.router.add_post("/api/extract_viz", self._extract_visualize)
         self.app.router.add_post("/api/extract_entities", self._extract_entities)
@@ -139,11 +140,19 @@ class WebUI:
                 output_language=output_language,
             )
 
+            # Clean up wiki-style macros that cause "Unknown macro" errors
+            if output_format == "confluence":
+                body = self._clean_confluence_macros(body)
+
+            # Extract source title for auto-fill
+            source_title = contents[0].title if contents else ""
+
             return web.json_response({
                 "body": body,
                 "format": output_format,
                 "template": template,
                 "sources_count": len(contents),
+                "source_title": source_title,
             })
         except Exception as e:
             import traceback
@@ -156,6 +165,98 @@ class WebUI:
                 "error_type": type(e).__name__,
                 "traceback": tb,
             }, status=500)
+
+    async def _process_stream(self, request):
+        """Process extracted content with LLM, streaming the response via SSE."""
+        response = None
+        try:
+            data = await request.json()
+            sources = data.get("sources", [])
+            template = data.get("template", "summary")
+            output_format = data.get("format", "confluence")
+            use_langextract = data.get("use_langextract", False)
+            extraction_profile = data.get("extraction_profile", "general")
+            output_length = data.get("output_length", "normal")
+            output_language = data.get("output_language", "ko")
+
+            response = web.StreamResponse(
+                status=200,
+                reason='OK',
+                headers={
+                    'Content-Type': 'text/event-stream',
+                    'Cache-Control': 'no-cache',
+                    'Connection': 'keep-alive',
+                    'X-Accel-Buffering': 'no',
+                },
+            )
+            await response.prepare(request)
+
+            # Step 1: Send extraction start event
+            await response.write(f"data: {json.dumps({'type': 'status', 'step': 'extract', 'message': '소스에서 텍스트 추출 중...'})}\n\n".encode())
+
+            contents = await self.router.extract_many(sources)
+            source_title = contents[0].title if contents else ""
+
+            await response.write(f"data: {json.dumps({'type': 'title', 'title': source_title})}\n\n".encode())
+
+            # Step 2: Optional LangExtract
+            combined = self.processor._combine_contents(contents)
+
+            extraction_context = ""
+            if use_langextract:
+                await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': 'LangExtract 구조화 추출 중...'})}\n\n".encode())
+                try:
+                    extractor = self.processor._get_extractor()
+                    result = await extractor.extract(combined[:5000], profile=extraction_profile)
+                    extraction_context = extractor.format_entities_as_context(result)
+                    if extraction_context:
+                        combined = f"{extraction_context}\n\n---\n\n## 원본 자료\n{combined}"
+                except Exception as e:
+                    extraction_context = f"\n[LangExtract 추출 실패: {e}]\n"
+
+            # Step 3: Render template
+            prompt = self.processor.templates.render(template, combined, output_format, output_length, output_language)
+
+            await response.write(f"data: {json.dumps({'type': 'status', 'step': 'llm', 'message': 'LLM 생성 중...'})}\n\n".encode())
+
+            # Step 4: Stream LLM response
+            full_body = ""
+            async for chunk in self.processor.stream_llm(prompt):
+                full_body += chunk
+                await response.write(f"data: {json.dumps({'type': 'chunk', 'text': chunk})}\n\n".encode())
+
+            # Clean wiki macros if confluence format
+            if output_format == "confluence":
+                cleaned = self._clean_confluence_macros(full_body)
+                if cleaned != full_body:
+                    full_body = cleaned
+                    # Send the cleaned full body
+                    await response.write(f"data: {json.dumps({'type': 'replace', 'text': full_body})}\n\n".encode())
+
+            # Step 5: Done
+            await response.write(f"data: {json.dumps({'type': 'done', 'sources_count': len(contents), 'format': output_format, 'template': template})}\n\n".encode())
+            await response.write_eof()
+            return response
+
+        except Exception as e:
+            import traceback
+            error_msg = str(e) if str(e) else f"{type(e).__name__}: (no message)"
+            tb = traceback.format_exc()
+            print(f"Stream error: {error_msg}")
+            print(tb)
+            # If we haven't started streaming yet, return JSON error
+            if response is None or not response.prepared:
+                return web.json_response({
+                    "error": error_msg,
+                    "error_type": type(e).__name__,
+                }, status=500)
+            # Otherwise try to send error event
+            try:
+                await response.write(f"data: {json.dumps({'type': 'error', 'error': error_msg})}\n\n".encode())
+                await response.write_eof()
+            except Exception:
+                pass
+            return response
 
     async def _publish(self, request):
         """Publish to Confluence."""
@@ -403,6 +504,49 @@ class WebUI:
             return web.json_response(tree)
         except Exception as e:
             return web.json_response({"error": str(e)}, status=500)
+
+    def _clean_confluence_macros(self, body: str) -> str:
+        """Remove wiki-style macros that cause 'Unknown macro' errors in Confluence.
+
+        LLMs sometimes generate {code}, {panel}, {note} etc. instead of
+        proper Confluence Storage Format XHTML.
+        """
+        import re
+
+        # Replace {code:lang}...{code} with ac:structured-macro
+        def replace_code_macro(m):
+            lang = m.group(1) or ""
+            code = m.group(2)
+            macro = '<ac:structured-macro ac:name="code">'
+            if lang:
+                macro += f'<ac:parameter ac:name="language">{lang}</ac:parameter>'
+            macro += f'<ac:plain-text-body><![CDATA[{code}]]></ac:plain-text-body>'
+            macro += '</ac:structured-macro>'
+            return macro
+
+        body = re.sub(
+            r'\{code(?::([a-zA-Z0-9+#]+))?\}(.*?)\{code\}',
+            replace_code_macro,
+            body,
+            flags=re.DOTALL,
+        )
+
+        # Remove simple wiki macros: {panel}, {note}, {info}, {warning}, {tip}, {expand}, {toc}, {excerpt}
+        simple_macros = ['panel', 'note', 'info', 'warning', 'tip', 'expand', 'toc', 'excerpt',
+                         'noformat', 'quote', 'section', 'column', 'color']
+        for macro in simple_macros:
+            # Remove opening tags: {macro}, {macro:title=...}
+            body = re.sub(r'\{' + macro + r'(?::[^}]*)?\}', '', body)
+            # Remove closing tags: {macro}
+            body = re.sub(r'\{' + macro + r'\}', '', body)
+
+        # Clean double-curly braces wiki links: {{monospace}} -> <code>monospace</code>
+        body = re.sub(r'\{\{(.+?)\}\}', r'<code>\1</code>', body)
+
+        # Clean wiki-style headings: h1. Title -> <h1>Title</h1>
+        body = re.sub(r'^h([1-6])\.\s*(.+)$', r'<h\1>\2</h\1>', body, flags=re.MULTILINE)
+
+        return body
 
     def _markdown_to_confluence_storage(self, md_text: str) -> str:
         """Convert markdown to Confluence storage format (XHTML).
