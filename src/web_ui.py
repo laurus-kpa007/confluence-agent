@@ -159,11 +159,21 @@ class WebUI:
                          "진행", "progress", "완료", "계획", "plan", "리스크", "risk"]
             weekly_score = sum(1 for kw in weekly_kw if kw in combined_lower or kw in source_titles)
 
+            # UX Research keywords
+            ux_kw = ["ux", "사용자 경험", "user experience", "사용성", "usability", "인터뷰",
+                     "interview", "페르소나", "persona", "저니맵", "journey map", "와이어프레임",
+                     "wireframe", "프로토타입", "prototype", "사용자 테스트", "user test",
+                     "usability test", "태스크", "task flow", "페인포인트", "pain point",
+                     "사용자 니즈", "user need", "heuristic", "휴리스틱", "sus ", "nps ",
+                     "완료율", "이탈률", "피드백", "feedback", "설문", "survey result"]
+            ux_score = sum(1 for kw in ux_kw if kw in combined_lower or kw in source_titles)
+
             scores = {
                 "meeting_notes": meeting_score,
                 "tech_doc": tech_score,
                 "research": research_score,
                 "weekly_report": weekly_score,
+                "ux_research": ux_score,
                 "summary": 1,  # baseline
             }
             template = max(scores, key=scores.get)
@@ -174,6 +184,7 @@ class WebUI:
                 "tech_doc": "tech_review",
                 "research": "research",
                 "weekly_report": "general",
+                "ux_research": "ux_research",
                 "summary": "general",
             }
             extraction_profile = profile_map.get(template, "general")
@@ -291,17 +302,24 @@ class WebUI:
                                "결론", "conclusion", "조사", "survey", "트렌드", "trend", "리서치", "보고서"]
                 weekly_kw = ["주간", "weekly", "실적", "이슈", "차주", "금주", "보고", "report",
                              "진행", "progress", "완료", "계획", "plan", "리스크", "risk"]
+                ux_kw = ["ux", "사용자 경험", "user experience", "사용성", "usability", "인터뷰",
+                         "interview", "페르소나", "persona", "저니맵", "journey map", "와이어프레임",
+                         "wireframe", "프로토타입", "prototype", "사용자 테스트", "user test",
+                         "usability test", "태스크", "task flow", "페인포인트", "pain point",
+                         "사용자 니즈", "user need", "heuristic", "휴리스틱", "sus ", "nps ",
+                         "완료율", "이탈률", "피드백", "feedback", "설문", "survey result"]
 
                 scores = {
                     "meeting_notes": sum(1 for kw in meeting_kw if kw in combined_lower or kw in source_titles),
                     "tech_doc": sum(1 for kw in tech_kw if kw in combined_lower or kw in source_titles),
                     "research": sum(1 for kw in research_kw if kw in combined_lower or kw in source_titles),
                     "weekly_report": sum(1 for kw in weekly_kw if kw in combined_lower or kw in source_titles),
+                    "ux_research": sum(1 for kw in ux_kw if kw in combined_lower or kw in source_titles),
                     "summary": 1,
                 }
                 template = max(scores, key=scores.get)
                 profile_map = {"meeting_notes": "meeting", "tech_doc": "tech_review", "research": "research",
-                               "weekly_report": "general", "summary": "general"}
+                               "weekly_report": "general", "ux_research": "ux_research", "summary": "general"}
                 extraction_profile = profile_map.get(template, "general")
                 use_langextract = scores[template] >= 3
 

@@ -79,6 +79,38 @@ EXTRACTION_PROFILES = {
             }
         ],
     },
+    "ux_research": {
+        "prompt": (
+            "UX 리서치 자료에서 다음을 추출하세요:\n"
+            "- user_need: 사용자 니즈/요구사항/불편사항\n"
+            "- persona: 사용자 유형/페르소나 특성\n"
+            "- insight: 핵심 인사이트/발견\n"
+            "- pain_point: 사용자 페인포인트/허들\n"
+            "- task_flow: 사용자 행동 흐름/태스크 시나리오\n"
+            "- quote: 사용자 원문 발언/피드백\n"
+            "- metric: UX 지표(완료율, 이탈률, SUS, NPS 등)\n"
+            "- recommendation: 개선 제안/디자인 권고\n"
+            "원문 그대로 추출하고 맥락을 보존하세요."
+        ),
+        "examples": [
+            {
+                "text": (
+                    "인터뷰 참여자 P3(30대, 마케터): '검색 결과가 너무 많아서 원하는 걸 찾기가 어려워요. "
+                    "필터를 눌러도 뭐가 뭔지 모르겠어요.' 태스크 완료율 42%, 평균 소요시간 3분 20초. "
+                    "검색→필터→결과확인→재검색 루프가 반복됨. 필터 라벨을 사용자 언어로 변경하고, "
+                    "인기 필터 조합을 추천하는 방안을 제안한다."
+                ),
+                "extractions": [
+                    {"class": "persona", "text": "P3(30대, 마케터)", "attributes": {"age_group": "30대", "role": "마케터"}},
+                    {"class": "quote", "text": "검색 결과가 너무 많아서 원하는 걸 찾기가 어려워요", "attributes": {"participant": "P3"}},
+                    {"class": "pain_point", "text": "필터를 눌러도 뭐가 뭔지 모르겠어요", "attributes": {"area": "검색 필터"}},
+                    {"class": "metric", "text": "태스크 완료율 42%, 평균 소요시간 3분 20초", "attributes": {"completion_rate": "42%", "avg_time": "3분 20초"}},
+                    {"class": "task_flow", "text": "검색→필터→결과확인→재검색 루프가 반복됨", "attributes": {"pattern": "반복 루프"}},
+                    {"class": "recommendation", "text": "필터 라벨을 사용자 언어로 변경하고, 인기 필터 조합을 추천", "attributes": {"type": "UI 개선"}},
+                ],
+            }
+        ],
+    },
     "general": {
         "prompt": (
             "텍스트에서 다음을 추출하세요:\n"
