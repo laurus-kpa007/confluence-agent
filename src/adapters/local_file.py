@@ -8,13 +8,22 @@ class LocalFileAdapter(BaseAdapter):
 
     _EXTENSIONS = {".pdf", ".docx", ".doc", ".txt", ".md", ".rst", ".csv", ".xlsx"}
 
+    @staticmethod
+    def _normalize_path(source: str) -> str:
+        """Normalize file path: expand ~ and resolve relative paths."""
+        return os.path.abspath(os.path.expanduser(source))
+
     def can_handle(self, source: str) -> bool:
-        if source.startswith(("http://", "https://")):
+        if source.startswith(("http://", "https://", "search:")):
             return False
         _, ext = os.path.splitext(source.lower())
-        return ext in self._EXTENSIONS or os.path.isfile(source)
+        if ext in self._EXTENSIONS:
+            return True
+        normalized = self._normalize_path(source)
+        return os.path.isfile(normalized)
 
     async def extract(self, source: str) -> SourceContent:
+        source = self._normalize_path(source)
         if not os.path.exists(source):
             raise FileNotFoundError(f"File not found: {source}")
 

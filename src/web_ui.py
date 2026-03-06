@@ -159,11 +159,21 @@ class WebUI:
                          "진행", "progress", "완료", "계획", "plan", "리스크", "risk"]
             weekly_score = sum(1 for kw in weekly_kw if kw in combined_lower or kw in source_titles)
 
+            # UX Research keywords
+            ux_kw = ["ux", "사용자 경험", "user experience", "사용성", "usability", "인터뷰",
+                     "interview", "페르소나", "persona", "저니맵", "journey map", "와이어프레임",
+                     "wireframe", "프로토타입", "prototype", "사용자 테스트", "user test",
+                     "usability test", "태스크", "task flow", "페인포인트", "pain point",
+                     "사용자 니즈", "user need", "heuristic", "휴리스틱", "sus ", "nps ",
+                     "완료율", "이탈률", "피드백", "feedback", "설문", "survey result"]
+            ux_score = sum(1 for kw in ux_kw if kw in combined_lower or kw in source_titles)
+
             scores = {
                 "meeting_notes": meeting_score,
                 "tech_doc": tech_score,
                 "research": research_score,
                 "weekly_report": weekly_score,
+                "ux_research": ux_score,
                 "summary": 1,  # baseline
             }
             template = max(scores, key=scores.get)
@@ -174,6 +184,7 @@ class WebUI:
                 "tech_doc": "tech_review",
                 "research": "research",
                 "weekly_report": "general",
+                "ux_research": "ux_research",
                 "summary": "general",
             }
             extraction_profile = profile_map.get(template, "general")
@@ -291,17 +302,24 @@ class WebUI:
                                "결론", "conclusion", "조사", "survey", "트렌드", "trend", "리서치", "보고서"]
                 weekly_kw = ["주간", "weekly", "실적", "이슈", "차주", "금주", "보고", "report",
                              "진행", "progress", "완료", "계획", "plan", "리스크", "risk"]
+                ux_kw = ["ux", "사용자 경험", "user experience", "사용성", "usability", "인터뷰",
+                         "interview", "페르소나", "persona", "저니맵", "journey map", "와이어프레임",
+                         "wireframe", "프로토타입", "prototype", "사용자 테스트", "user test",
+                         "usability test", "태스크", "task flow", "페인포인트", "pain point",
+                         "사용자 니즈", "user need", "heuristic", "휴리스틱", "sus ", "nps ",
+                         "완료율", "이탈률", "피드백", "feedback", "설문", "survey result"]
 
                 scores = {
                     "meeting_notes": sum(1 for kw in meeting_kw if kw in combined_lower or kw in source_titles),
                     "tech_doc": sum(1 for kw in tech_kw if kw in combined_lower or kw in source_titles),
                     "research": sum(1 for kw in research_kw if kw in combined_lower or kw in source_titles),
                     "weekly_report": sum(1 for kw in weekly_kw if kw in combined_lower or kw in source_titles),
+                    "ux_research": sum(1 for kw in ux_kw if kw in combined_lower or kw in source_titles),
                     "summary": 1,
                 }
                 template = max(scores, key=scores.get)
                 profile_map = {"meeting_notes": "meeting", "tech_doc": "tech_review", "research": "research",
-                               "weekly_report": "general", "summary": "general"}
+                               "weekly_report": "general", "ux_research": "ux_research", "summary": "general"}
                 extraction_profile = profile_map.get(template, "general")
                 use_langextract = scores[template] >= 3
 
@@ -312,11 +330,20 @@ class WebUI:
 
             extraction_context = ""
             if use_langextract:
-                await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': 'LangExtract 구조화 추출 중...'})}\n\n".encode())
+                await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'LangExtract 구조화 추출 중... ({len(contents)}개 소스)'})}\n\n".encode())
                 try:
                     extractor = self.processor._get_extractor()
-                    result = await extractor.extract(combined[:5000], profile=extraction_profile)
-                    extraction_context = extractor.format_entities_as_context(result)
+                    extraction_results = []
+                    for idx, c in enumerate(contents, 1):
+                        try:
+                            await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'구조화 추출 중... ({idx}/{len(contents)}) {c.title}'})}\n\n".encode())
+                            text_chunk = c.text
+                            result = await extractor.extract(text_chunk, profile=extraction_profile)
+                            result.source_title = c.title
+                            extraction_results.append(result)
+                        except Exception as e:
+                            await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'⚠️ 소스 {idx} 추출 실패: {str(e)[:100]}'})}\n\n".encode())
+                    extraction_context = extractor.format_multi_results_as_context(extraction_results)
                     if extraction_context:
                         combined = f"{extraction_context}\n\n---\n\n## 원본 자료\n{combined}"
                 except Exception as e:
@@ -478,7 +505,7 @@ class WebUI:
         try:
             # Extract text from sources
             contents = await self.router.extract_many(sources)
-            combined = "\n\n".join(c.text[:10000] for c in contents)
+            combined = "\n\n".join(c.text for c in contents)
 
             # Run LangExtract with visualization
             from .extractor import StructuredExtractor
@@ -573,7 +600,7 @@ class WebUI:
                 model_url=base_url,
                 api_key=api_key,
             )
-            result = await extractor.extract(combined[:5000], profile=profile)
+            result = await extractor.extract(combined, profile=profile)
 
             # Convert entities to JSON-serializable format
             entities_data = []

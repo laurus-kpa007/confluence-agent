@@ -47,7 +47,7 @@ class WebSearchAdapter(BaseAdapter):
             try:
                 logger.debug("Scraping URL: %s", url)
                 content = await self._scraper.extract(url)
-                texts.append(f"[{content.title}]\n{content.source_url}\n{content.text[:3000]}")
+                texts.append(f"[{content.title}]\n{content.source_url}\n{content.text}")
                 logger.debug("Scraped %d chars from %s", len(content.text), url)
             except Exception as e:
                 logger.warning("Failed to scrape %s: %s", url, e)

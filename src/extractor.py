@@ -79,6 +79,38 @@ EXTRACTION_PROFILES = {
             }
         ],
     },
+    "ux_research": {
+        "prompt": (
+            "UX 리서치 자료에서 다음을 추출하세요:\n"
+            "- user_need: 사용자 니즈/요구사항/불편사항\n"
+            "- persona: 사용자 유형/페르소나 특성\n"
+            "- insight: 핵심 인사이트/발견\n"
+            "- pain_point: 사용자 페인포인트/허들\n"
+            "- task_flow: 사용자 행동 흐름/태스크 시나리오\n"
+            "- quote: 사용자 원문 발언/피드백\n"
+            "- metric: UX 지표(완료율, 이탈률, SUS, NPS 등)\n"
+            "- recommendation: 개선 제안/디자인 권고\n"
+            "원문 그대로 추출하고 맥락을 보존하세요."
+        ),
+        "examples": [
+            {
+                "text": (
+                    "인터뷰 참여자 P3(30대, 마케터): '검색 결과가 너무 많아서 원하는 걸 찾기가 어려워요. "
+                    "필터를 눌러도 뭐가 뭔지 모르겠어요.' 태스크 완료율 42%, 평균 소요시간 3분 20초. "
+                    "검색→필터→결과확인→재검색 루프가 반복됨. 필터 라벨을 사용자 언어로 변경하고, "
+                    "인기 필터 조합을 추천하는 방안을 제안한다."
+                ),
+                "extractions": [
+                    {"class": "persona", "text": "P3(30대, 마케터)", "attributes": {"age_group": "30대", "role": "마케터"}},
+                    {"class": "quote", "text": "검색 결과가 너무 많아서 원하는 걸 찾기가 어려워요", "attributes": {"participant": "P3"}},
+                    {"class": "pain_point", "text": "필터를 눌러도 뭐가 뭔지 모르겠어요", "attributes": {"area": "검색 필터"}},
+                    {"class": "metric", "text": "태스크 완료율 42%, 평균 소요시간 3분 20초", "attributes": {"completion_rate": "42%", "avg_time": "3분 20초"}},
+                    {"class": "task_flow", "text": "검색→필터→결과확인→재검색 루프가 반복됨", "attributes": {"pattern": "반복 루프"}},
+                    {"class": "recommendation", "text": "필터 라벨을 사용자 언어로 변경하고, 인기 필터 조합을 추천", "attributes": {"type": "UI 개선"}},
+                ],
+            }
+        ],
+    },
     "general": {
         "prompt": (
             "텍스트에서 다음을 추출하세요:\n"
@@ -148,12 +180,8 @@ class StructuredExtractor:
             examples.append(lx.data.ExampleData(text=ex["text"], extractions=extractions))
 
         # Run extraction
-        # Limit text size more aggressively for stability
-        max_chars = 10000  # Reduce from 50000 to avoid JSON parsing issues
-        text_chunk = text[:max_chars]
-
         kwargs = {
-            "text_or_documents": text_chunk,
+            "text_or_documents": text,
             "prompt_description": prompt,
             "examples": examples,
             "model_id": self.model_id,
@@ -178,7 +206,7 @@ class StructuredExtractor:
                     print(f"⚠️  JSON 파싱 오류 발생, fence_output=False로 재시도...")
                     kwargs["fence_output"] = False
                     # Also try with even smaller chunk
-                    kwargs["text_or_documents"] = text[:5000]
+                    kwargs["text_or_documents"] = text[:len(text)//2] if len(text) > 5000 else text
                     result = lx.extract(**kwargs)
                     print(f"✅ 재시도 성공!")
                 except Exception as e2:
@@ -234,9 +262,8 @@ class StructuredExtractor:
             ]
             examples.append(lx.data.ExampleData(text=ex["text"], extractions=extractions))
 
-        max_chars = 10000
         kwargs = {
-            "text_or_documents": text[:max_chars],
+            "text_or_documents": text,
             "prompt_description": prof["prompt"],
             "examples": examples,
             "model_id": self.model_id,
@@ -255,7 +282,7 @@ class StructuredExtractor:
             if "JSON" in error_msg or "parse" in error_msg.lower() or "extractions" in error_msg.lower():
                 print(f"⚠️  시각화 추출 오류, fence_output=False로 재시도...")
                 kwargs["fence_output"] = False
-                kwargs["text_or_documents"] = text[:5000]
+                kwargs["text_or_documents"] = text[:len(text)//2] if len(text) > 5000 else text
                 result = lx.extract(**kwargs)
             else:
                 raise
@@ -289,13 +316,16 @@ class StructuredExtractor:
         if not result.entities:
             return ""
 
-        lines = ["## 구조화 추출 결과\n"]
+        lines = []
+        if result.source_title:
+            lines.append(f"### 소스: {result.source_title}\n")
+
         by_class = {}
         for e in result.entities:
             by_class.setdefault(e["class"], []).append(e)
 
         for cls, items in by_class.items():
-            lines.append(f"### {cls}")
+            lines.append(f"#### {cls}")
             for item in items:
                 attrs = ", ".join(f"{k}: {v}" for k, v in item.get("attributes", {}).items())
                 line = f"- {item['text']}"
@@ -305,3 +335,16 @@ class StructuredExtractor:
             lines.append("")
 
         return "\n".join(lines)
+
+    def format_multi_results_as_context(self, results: List[ExtractionResult]) -> str:
+        """Format multiple extraction results as combined structured context for LLM."""
+        sections = []
+        for result in results:
+            section = self.format_entities_as_context(result)
+            if section:
+                sections.append(section)
+
+        if not sections:
+            return ""
+
+        return "## 구조화 추출 결과\n\n" + "\n---\n\n".join(sections)
