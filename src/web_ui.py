@@ -341,9 +341,8 @@ class WebUI:
                     extraction_results = []
                     for idx, c in enumerate(contents, 1):
                         pct = 25 + round(idx / n * 25)  # 25% ~ 50%
-                        mode = "LangExtract" if len(c.text) <= extractor.LANGEXTRACT_MAX else "LLM"
                         try:
-                            await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'구조화 추출 중... ({idx}/{n}) {c.title} [{mode}]', 'progress': pct, 'sub_current': idx, 'sub_total': n})}\n\n".encode())
+                            await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'구조화 추출 중... ({idx}/{n}) {c.title} ({len(c.text):,}자)', 'progress': pct, 'sub_current': idx, 'sub_total': n})}\n\n".encode())
                             result = await extractor.extract(c.text, profile=extraction_profile)
                             result.source_title = c.title
                             extraction_results.append(result)
