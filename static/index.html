@@ -648,6 +648,7 @@
         let buffer = '';
         let streamStarted = false;
         let sourcesCount = 0;
+        let llmChunkCount = 0;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -668,11 +669,11 @@
             switch (event.type) {
               case 'status':
                 if (event.step === 'extract') {
-                  updateProgress(1, 4, '📥 ' + event.message);
+                  updateProgress(1, 4, '📥 ' + event.message, event.progress);
                 } else if (event.step === 'langextract') {
-                  updateProgress(2, 4, '🔬 ' + event.message);
+                  updateProgress(2, 4, '🔬 ' + event.message, event.progress);
                 } else if (event.step === 'llm') {
-                  updateProgress(3, 4, '🤖 ' + event.message);
+                  updateProgress(3, 4, '🤖 ' + event.message, event.progress);
                   // Clear preview for streaming content
                   previewDiv.innerHTML = '';
                   streamStarted = true;
@@ -701,7 +702,10 @@
               case 'chunk':
                 generatedBody += event.text;
                 if (streamStarted) {
-                  // Render incrementally
+                  // Estimate LLM progress (50% → 95% range)
+                  llmChunkCount = (llmChunkCount || 0) + 1;
+                  const llmPct = Math.min(95, 50 + Math.round(llmChunkCount / (llmChunkCount + 20) * 45));
+                  updateProgress(3, 4, `🤖 LLM 생성 중... (${generatedBody.length.toLocaleString()}자)`, llmPct);
                   renderStreamingPreview(generatedBody, format);
                 }
                 break;
@@ -714,7 +718,7 @@
 
               case 'done':
                 sourcesCount = event.sources_count;
-                updateProgress(4, 4, '✨ 완료!');
+                updateProgress(4, 4, '✨ 완료!', 100);
                 break;
 
               case 'error':
@@ -1095,13 +1099,13 @@
       el.innerHTML = html;
     }
 
-    function updateProgress(currentStep, totalSteps, stepName) {
-      const percent = Math.round((currentStep / totalSteps) * 100);
+    function updateProgress(currentStep, totalSteps, stepName, serverPercent) {
+      const percent = serverPercent != null ? serverPercent : Math.round((currentStep / totalSteps) * 100);
       const steps = [
-        { text: '1. 소스 추출', status: currentStep > 1 ? 'done' : currentStep === 1 ? 'active' : 'pending' },
-        { text: '2. 구조화 분석', status: currentStep > 2 ? 'done' : currentStep === 2 ? 'active' : 'pending' },
-        { text: '3. LLM 생성 (스트리밍)', status: currentStep > 3 ? 'done' : currentStep === 3 ? 'active' : 'pending' },
-        { text: '4. 완료', status: currentStep > 4 ? 'done' : currentStep === 4 ? 'active' : 'pending' },
+        { text: `1. 소스 추출 (${percent >= 25 ? '완료' : percent + '%'})`, status: currentStep > 1 ? 'done' : currentStep === 1 ? 'active' : 'pending' },
+        { text: `2. 구조화 분석 (${currentStep === 2 ? percent + '%' : currentStep > 2 ? '완료' : '대기'})`, status: currentStep > 2 ? 'done' : currentStep === 2 ? 'active' : 'pending' },
+        { text: `3. LLM 생성 (${currentStep === 3 ? percent + '%' : currentStep > 3 ? '완료' : '대기'})`, status: currentStep > 3 ? 'done' : currentStep === 3 ? 'active' : 'pending' },
+        { text: `4. 완료`, status: currentStep >= 4 ? 'done' : 'pending' },
       ];
 
       setStatus('loading', stepName, { percent, steps });
