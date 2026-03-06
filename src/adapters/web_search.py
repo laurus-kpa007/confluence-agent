@@ -131,8 +131,8 @@ class WebSearchAdapter(BaseAdapter):
             hints = [
                 f"검색 실패: {e}",
                 "해결 방법:",
-                "  1. config.yaml에서 ssl_verify: false 설정 (사내 인증서 환경)",
-                "  2. config.yaml search 섹션에 proxy 설정 (프록시 환경)",
+                "  1. .env에서 SSL_VERIFY=false 설정 (사내 인증서 환경)",
+                "  2. .env에서 SEARCH_PROXY 또는 HTTPS_PROXY 설정 (프록시 환경)",
                 "  3. Google/Brave API 키 설정",
                 "  4. 네트워크 연결 확인",
             ]

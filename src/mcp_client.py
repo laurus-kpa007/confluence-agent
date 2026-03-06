@@ -1,28 +1,22 @@
 """Lightweight MCP client for calling MCP server tools.
 
-This module handles communication with MCP servers configured in config.yaml.
+This module handles communication with MCP servers configured via environment variables.
 Each MCP server runs as a subprocess and communicates via stdio JSON-RPC.
 """
 import asyncio
 import json
 import subprocess
 from typing import Any, Dict, Optional
-from pathlib import Path
 
-import yaml
-
-CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
+from .config_loader import load_config
 
 # Cache running MCP server processes
 _servers: Dict[str, subprocess.Popen] = {}
 
 
 def _load_mcp_config() -> dict:
-    if CONFIG_PATH.exists():
-        with open(CONFIG_PATH) as f:
-            cfg = yaml.safe_load(f)
-        return cfg.get("mcp_servers", {})
-    return {}
+    config = load_config()
+    return config.get("mcp_servers", {})
 
 
 async def call_mcp_tool(
@@ -31,21 +25,21 @@ async def call_mcp_tool(
     arguments: Optional[Dict[str, Any]] = None,
 ) -> dict:
     """Call a tool on an MCP server.
-    
+
     Args:
         server: MCP server name (e.g., "gdrive", "sharepoint")
         tool: Tool name to call
         arguments: Tool arguments
-        
+
     Returns:
         Tool result as dict
     """
     config = _load_mcp_config()
     server_cfg = config.get(server)
     if not server_cfg:
-        raise ValueError(f"MCP server '{server}' not configured in config.yaml")
+        raise ValueError(f"MCP server '{server}' not configured. Set MCP_{server.upper()}_ENABLED=true in .env")
     if not server_cfg.get("enabled"):
-        raise ValueError(f"MCP server '{server}' is disabled")
+        raise ValueError(f"MCP server '{server}' is disabled. Set MCP_{server.upper()}_ENABLED=true in .env")
 
     # Start server if not running
     if server not in _servers or _servers[server].poll() is not None:
