@@ -103,7 +103,11 @@ class LLMProcessor:
             header = f"--- 소스 {i}: [{c.source_type}] {c.title} ---"
             if c.source_url:
                 header += f"\nURL: {c.source_url}"
-            parts.append(f"{header}\n{c.text}")
+            if not c.text or not c.text.strip():
+                logger.warning("Source '%s' has empty text content", c.title)
+                parts.append(f"{header}\n[경고: 이 소스에서 텍스트를 추출하지 못했습니다. 제목만으로 내용을 추측하지 마세요.]")
+            else:
+                parts.append(f"{header}\n{c.text}")
         return "\n\n".join(parts)
 
     async def _call_llm(self, prompt: str) -> str:
