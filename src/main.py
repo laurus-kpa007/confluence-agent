@@ -7,7 +7,7 @@ from pathlib import Path
 from .router import SourceRouter
 from .processor import LLMProcessor
 from .publisher import ConfluencePublisher
-from .config_loader import load_config as load_config_with_env, get_search_config, get_ssl_verify
+from .config_loader import load_config as load_config_from_env, get_search_config, get_ssl_verify
 
 logger = logging.getLogger(__name__)
 
@@ -15,12 +15,11 @@ logger = logging.getLogger(__name__)
 from .adapters.gdrive import GDriveAdapter
 from .adapters.sharepoint import SharePointAdapter
 
-CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
 ENV_PATH = Path(__file__).parent.parent / ".env"
 
 
 def load_config() -> dict:
-    return load_config_with_env(CONFIG_PATH, ENV_PATH)
+    return load_config_from_env(ENV_PATH)
 
 
 def build_router(config: dict) -> SourceRouter:
@@ -44,6 +43,10 @@ def build_router(config: dict) -> SourceRouter:
 
 
 async def run(args):
+    if getattr(args, 'env_file', None):
+        global ENV_PATH
+        ENV_PATH = Path(args.env_file)
+
     config = load_config()
     ssl_verify = get_ssl_verify(config)
 
@@ -120,13 +123,13 @@ def main():
                      default="normal", help="Output length (compact=50%%, normal=100%%, detailed=200%%, comprehensive=300%%)")
     cli.add_argument("--parent-id", help="Parent page ID")
     cli.add_argument("--dry-run", action="store_true", help="Don't publish, just print")
-    cli.add_argument("--config", "-c", help="Config file path")
+    cli.add_argument("--env-file", help=".env file path")
 
     # Web UI mode
     ui = subparsers.add_parser("ui", help="Start web UI")
     ui.add_argument("--host", default="127.0.0.1")
     ui.add_argument("--port", type=int, default=8501)
-    ui.add_argument("--config", "-c", help="Config file path")
+    ui.add_argument("--env-file", help=".env file path")
 
     # Global verbose flag
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable detailed debug logging")
@@ -142,9 +145,9 @@ def main():
     )
 
     if args.command == "ui":
-        if getattr(args, 'config', None):
-            global CONFIG_PATH
-            CONFIG_PATH = Path(args.config)
+        if getattr(args, 'env_file', None):
+            global ENV_PATH
+            ENV_PATH = Path(args.env_file)
         config = load_config()
         ssl_verify = get_ssl_verify(config)
         router = build_router(config)
@@ -160,8 +163,6 @@ def main():
         web_ui = WebUI(config, router, processor)
         web_ui.run(host=args.host, port=args.port)
     elif args.command == "run":
-        if getattr(args, 'config', None):
-            CONFIG_PATH = Path(args.config)
         asyncio.run(run(args))
     else:
         parser.print_help()

@@ -6,7 +6,7 @@ from .base import BaseAdapter, SourceContent
 class GDriveAdapter(BaseAdapter):
     """Access files via Google Drive MCP server.
     
-    Requires: google-drive-mcp server configured in config.yaml
+    Requires: MCP_GDRIVE_ENABLED=true in .env
     Uses MCP protocol to communicate with the server.
     """
     name = "gdrive"

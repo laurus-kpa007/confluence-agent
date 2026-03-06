@@ -6,7 +6,7 @@ from .base import BaseAdapter, SourceContent
 class SharePointAdapter(BaseAdapter):
     """Access files via SharePoint/OneDrive MCP server.
     
-    Requires: mcp-onedrive-sharepoint server configured in config.yaml
+    Requires: MCP_SHAREPOINT_ENABLED=true in .env
     """
     name = "sharepoint"
 

@@ -10,6 +10,7 @@ DEFAULT_TEMPLATES = {
 
 규칙:
 - {format_instructions}
+- 반드시 제공된 자료에 있는 내용만 사용하세요. 자료에 없는 내용을 꾸며내지 마세요.
 - 핵심 내용만 간결하게 정리
 - 출처 링크 포함
 - 표가 적절하면 사용
@@ -19,6 +20,8 @@ DEFAULT_TEMPLATES = {
 {content}""",
 
     "meeting_notes": """다음 자료를 회의록 형식으로 정리해주세요.
+
+중요: 반드시 제공된 자료에 있는 내용만 사용하세요. 자료에 없는 내용을 꾸며내거나 추측하지 마세요. 자료에서 확인할 수 없는 항목은 "자료에 언급 없음"으로 표시하세요.
 
 형식:
 ## 회의 개요
@@ -41,6 +44,8 @@ DEFAULT_TEMPLATES = {
 {content}""",
 
     "tech_doc": """다음 자료를 기술 문서 형식으로 정리해주세요.
+
+중요: 반드시 제공된 자료에 있는 내용만 사용하세요. 자료에 없는 내용을 꾸며내거나 추측하지 마세요. 자료에서 확인할 수 없는 항목은 "자료에 언급 없음"으로 표시하세요.
 
 형식:
 ## 개요
@@ -65,6 +70,8 @@ DEFAULT_TEMPLATES = {
 
     "research": """다음 자료들을 리서치 노트로 종합 정리해주세요.
 
+중요: 반드시 제공된 자료에 있는 내용만 사용하세요. 자료에 없는 내용을 꾸며내거나 추측하지 마세요. 자료에서 확인할 수 없는 항목은 "자료에 언급 없음"으로 표시하세요.
+
 형식:
 ## 요약
 핵심 인사이트 3-5줄
@@ -87,6 +94,8 @@ DEFAULT_TEMPLATES = {
 {content}""",
 
     "weekly_report": """다음 자료를 주간 보고서 형식으로 정리해주세요.
+
+중요: 반드시 제공된 자료에 있는 내용만 사용하세요. 자료에 없는 내용을 꾸며내거나 추측하지 마세요. 자료에서 확인할 수 없는 항목은 "자료에 언급 없음"으로 표시하세요.
 
 형식:
 ## 금주 실적
@@ -219,7 +228,16 @@ class TemplateManager:
         }
         language_inst = language_instructions.get(language, language_instructions["ko"])
 
-        # Combine format, length, and language instructions
-        combined_instructions = f"{fmt}\n길이: {length_inst}\n{language_inst}"
+        # Grounding rule: prevent hallucination
+        grounding_rule = """
+**[필수] 자료 기반 작성 원칙:**
+- 반드시 아래 제공된 자료에 있는 내용만을 기반으로 작성하세요.
+- 자료에 없는 내용을 추측하거나 꾸며내지 마세요.
+- 자료에서 확인할 수 없는 정보는 "자료에 언급 없음"으로 명시하세요.
+- 자료의 원문 표현을 최대한 활용하고, 임의로 해석하거나 확대하지 마세요.
+- 날짜, 수치, 이름 등 사실 정보는 자료에 명시된 것만 사용하세요."""
+
+        # Combine format, length, language, and grounding instructions
+        combined_instructions = f"{fmt}\n{grounding_rule}\n길이: {length_inst}\n{language_inst}"
 
         return template.format(content=content, format_instructions=combined_instructions)
