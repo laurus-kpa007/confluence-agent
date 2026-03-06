@@ -283,9 +283,13 @@ class WebUI:
             await response.prepare(request)
 
             # Step 1: Send extraction start event
-            await response.write(f"data: {json.dumps({'type': 'status', 'step': 'extract', 'message': '소스에서 텍스트 추출 중...'})}\n\n".encode())
+            total_sources = len(sources)
+            total_steps = 4  # extract, langextract, llm, done
+            await response.write(f"data: {json.dumps({'type': 'status', 'step': 'extract', 'message': f'소스에서 텍스트 추출 중... (0/{total_sources})', 'progress': 0, 'total_sources': total_sources})}\n\n".encode())
 
             contents = await self.router.extract_many(sources)
+
+            await response.write(f"data: {json.dumps({'type': 'status', 'step': 'extract', 'message': f'소스 추출 완료 ({len(contents)}/{total_sources})', 'progress': 25})}\n\n".encode())
 
             # Auto-select template and extraction profile if requested
             if auto_select and contents:
@@ -330,29 +334,32 @@ class WebUI:
 
             extraction_context = ""
             if use_langextract:
-                await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'LangExtract 구조화 추출 중... ({len(contents)}개 소스)'})}\n\n".encode())
+                n = len(contents)
+                await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'구조화 추출 중... (0/{n})', 'progress': 25})}\n\n".encode())
                 try:
                     extractor = self.processor._get_extractor()
                     extraction_results = []
                     for idx, c in enumerate(contents, 1):
+                        pct = 25 + round((idx - 1) / n * 25)  # 25% ~ 50%
                         try:
-                            await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'구조화 추출 중... ({idx}/{len(contents)}) {c.title}'})}\n\n".encode())
+                            await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'구조화 추출 중... ({idx}/{n}) {c.title}', 'progress': pct, 'sub_current': idx, 'sub_total': n})}\n\n".encode())
                             text_chunk = c.text
                             result = await extractor.extract(text_chunk, profile=extraction_profile)
                             result.source_title = c.title
                             extraction_results.append(result)
                         except Exception as e:
-                            await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'⚠️ 소스 {idx} 추출 실패: {str(e)[:100]}'})}\n\n".encode())
+                            await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'⚠️ 소스 {idx} 추출 실패: {str(e)[:100]}', 'progress': pct})}\n\n".encode())
                     extraction_context = extractor.format_multi_results_as_context(extraction_results)
                     if extraction_context:
                         combined = f"{extraction_context}\n\n---\n\n## 원본 자료\n{combined}"
+                    await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'구조화 추출 완료 ({n}/{n})', 'progress': 50})}\n\n".encode())
                 except Exception as e:
                     extraction_context = f"\n[LangExtract 추출 실패: {e}]\n"
 
             # Step 3: Render template
             prompt = self.processor.templates.render(template, combined, output_format, output_length, output_language)
 
-            await response.write(f"data: {json.dumps({'type': 'status', 'step': 'llm', 'message': 'LLM 생성 중...'})}\n\n".encode())
+            await response.write(f"data: {json.dumps({'type': 'status', 'step': 'llm', 'message': 'LLM 생성 중...', 'progress': 50})}\n\n".encode())
 
             # Step 4: Stream LLM response
             full_body = ""
@@ -369,7 +376,7 @@ class WebUI:
                     await response.write(f"data: {json.dumps({'type': 'replace', 'text': full_body})}\n\n".encode())
 
             # Step 5: Done
-            await response.write(f"data: {json.dumps({'type': 'done', 'sources_count': len(contents), 'format': output_format, 'template': template})}\n\n".encode())
+            await response.write(f"data: {json.dumps({'type': 'done', 'sources_count': len(contents), 'format': output_format, 'template': template, 'progress': 100})}\n\n".encode())
             await response.write_eof()
             return response
 
