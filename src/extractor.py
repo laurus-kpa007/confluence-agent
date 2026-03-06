@@ -321,13 +321,16 @@ class StructuredExtractor:
         if not result.entities:
             return ""
 
-        lines = ["## 구조화 추출 결과\n"]
+        lines = []
+        if result.source_title:
+            lines.append(f"### 소스: {result.source_title}\n")
+
         by_class = {}
         for e in result.entities:
             by_class.setdefault(e["class"], []).append(e)
 
         for cls, items in by_class.items():
-            lines.append(f"### {cls}")
+            lines.append(f"#### {cls}")
             for item in items:
                 attrs = ", ".join(f"{k}: {v}" for k, v in item.get("attributes", {}).items())
                 line = f"- {item['text']}"
@@ -337,3 +340,16 @@ class StructuredExtractor:
             lines.append("")
 
         return "\n".join(lines)
+
+    def format_multi_results_as_context(self, results: List[ExtractionResult]) -> str:
+        """Format multiple extraction results as combined structured context for LLM."""
+        sections = []
+        for result in results:
+            section = self.format_entities_as_context(result)
+            if section:
+                sections.append(section)
+
+        if not sections:
+            return ""
+
+        return "## 구조화 추출 결과\n\n" + "\n---\n\n".join(sections)

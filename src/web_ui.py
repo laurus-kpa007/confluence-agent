@@ -330,11 +330,20 @@ class WebUI:
 
             extraction_context = ""
             if use_langextract:
-                await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': 'LangExtract 구조화 추출 중...'})}\n\n".encode())
+                await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'LangExtract 구조화 추출 중... ({len(contents)}개 소스)'})}\n\n".encode())
                 try:
                     extractor = self.processor._get_extractor()
-                    result = await extractor.extract(combined[:5000], profile=extraction_profile)
-                    extraction_context = extractor.format_entities_as_context(result)
+                    extraction_results = []
+                    for idx, c in enumerate(contents, 1):
+                        try:
+                            await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'구조화 추출 중... ({idx}/{len(contents)}) {c.title}'})}\n\n".encode())
+                            text_chunk = c.text[:8000]
+                            result = await extractor.extract(text_chunk, profile=extraction_profile)
+                            result.source_title = c.title
+                            extraction_results.append(result)
+                        except Exception as e:
+                            await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'⚠️ 소스 {idx} 추출 실패: {str(e)[:100]}'})}\n\n".encode())
+                    extraction_context = extractor.format_multi_results_as_context(extraction_results)
                     if extraction_context:
                         combined = f"{extraction_context}\n\n---\n\n## 원본 자료\n{combined}"
                 except Exception as e:

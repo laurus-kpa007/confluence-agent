@@ -66,18 +66,24 @@ class LLMProcessor:
         combined = self._combine_contents(contents)
         logger.debug("Combined content length: %d chars", len(combined))
 
-        # Optional: structured extraction with LangExtract
+        # Optional: structured extraction with LangExtract (per-source)
         extraction_context = ""
         if use_langextract:
             try:
                 extractor = self._get_extractor()
-                # Extract from combined text (truncated for stability and speed)
-                # Limit to 5000 chars to avoid JSON parsing issues
-                result = await extractor.extract(
-                    combined[:5000],
-                    profile=extraction_profile,
-                )
-                extraction_context = extractor.format_entities_as_context(result)
+                extraction_results = []
+                for c in contents:
+                    try:
+                        text_chunk = c.text[:8000]
+                        result = await extractor.extract(
+                            text_chunk,
+                            profile=extraction_profile,
+                        )
+                        result.source_title = c.title
+                        extraction_results.append(result)
+                    except Exception as e:
+                        logger.warning("LangExtract failed for source '%s': %s", c.title, e)
+                extraction_context = extractor.format_multi_results_as_context(extraction_results)
                 if extraction_context:
                     combined = f"{extraction_context}\n\n---\n\n## 원본 자료\n{combined}"
             except Exception as e:
