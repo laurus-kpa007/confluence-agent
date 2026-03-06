@@ -1,10 +1,14 @@
-"""LangExtract integration - structured information extraction from text.
+"""Structured information extraction from text.
 
-Uses google/langextract to extract structured entities (decisions, action items,
-key points, etc.) from raw text before LLM processing.
+Uses LangExtract for short texts (precise, example-based extraction)
+and direct LLM prompting for long texts (handles long context natively).
 """
+import json
+import logging
 from typing import List, Optional, Dict
 from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -147,35 +151,8 @@ class StructuredExtractor:
         self.model_url = model_url
         self.api_key = api_key
 
-    # Max chars per LangExtract call — LLM-based extraction hangs on large inputs
-    CHUNK_SIZE = 4000
-    CHUNK_OVERLAP = 200
-
-    def _split_into_chunks(self, text: str) -> List[str]:
-        """Split text into chunks that LangExtract can process without hanging."""
-        if len(text) <= self.CHUNK_SIZE:
-            return [text]
-
-        chunks = []
-        start = 0
-        while start < len(text):
-            end = start + self.CHUNK_SIZE
-            # Try to break at paragraph or sentence boundary
-            if end < len(text):
-                # Look for paragraph break
-                para_break = text.rfind("\n\n", start + self.CHUNK_SIZE // 2, end)
-                if para_break > start:
-                    end = para_break
-                else:
-                    # Look for sentence break
-                    for sep in [". ", ".\n", "? ", "! ", "。", "\n"]:
-                        sent_break = text.rfind(sep, start + self.CHUNK_SIZE // 2, end)
-                        if sent_break > start:
-                            end = sent_break + len(sep)
-                            break
-            chunks.append(text[start:end])
-            start = end - self.CHUNK_OVERLAP if end < len(text) else end
-        return chunks
+    # LangExtract works well under this limit; above it, use direct LLM extraction
+    LANGEXTRACT_MAX = 4000
 
     async def extract(
         self,
@@ -185,38 +162,24 @@ class StructuredExtractor:
     ) -> ExtractionResult:
         """Run structured extraction on text.
 
-        Long texts are automatically split into chunks and results are merged.
-
-        Args:
-            text: Input text to extract from
-            profile: Extraction profile (meeting, tech_review, research, general)
-            custom_prompt: Override profile prompt with custom instructions
+        Short texts (<=4000 chars) use LangExtract for precise, example-based extraction.
+        Long texts use the main LLM directly with a structured extraction prompt.
         """
-        chunks = self._split_into_chunks(text)
-        all_entities = []
+        if len(text) <= self.LANGEXTRACT_MAX:
+            entities = await self._extract_with_langextract(text, profile, custom_prompt)
+        else:
+            logger.info("Text too long for LangExtract (%d chars), using direct LLM extraction", len(text))
+            entities = await self._extract_with_llm(text, profile, custom_prompt)
 
-        for chunk in chunks:
-            chunk_entities = await self._extract_chunk(chunk, profile, custom_prompt)
-            all_entities.extend(chunk_entities)
+        return ExtractionResult(entities=entities, raw_text=text)
 
-        # Deduplicate entities with same text
-        seen = set()
-        unique = []
-        for e in all_entities:
-            key = (e["class"], e["text"][:80])
-            if key not in seen:
-                seen.add(key)
-                unique.append(e)
-
-        return ExtractionResult(entities=unique, raw_text=text)
-
-    async def _extract_chunk(
+    async def _extract_with_langextract(
         self,
         text: str,
         profile: str = "general",
         custom_prompt: Optional[str] = None,
     ) -> List[Dict]:
-        """Extract entities from a single chunk."""
+        """Extract entities using LangExtract (best for short texts)."""
         import langextract as lx
 
         prof = EXTRACTION_PROFILES.get(profile, EXTRACTION_PROFILES["general"])
@@ -259,14 +222,11 @@ class StructuredExtractor:
                 except Exception as e2:
                     raise RuntimeError(
                         f"LangExtract 추출 실패 (model: {self.model_id}, url: {self.model_url}):\n"
-                        f"첫 시도: {error_msg}\n"
-                        f"재시도: {str(e2)}\n"
-                        f"Ollama가 실행 중인지 확인하세요: {self.model_url or 'LLM_BASE_URL 환경변수를 설정하세요'}"
+                        f"첫 시도: {error_msg}\n재시도: {str(e2)}"
                     ) from e2
             else:
                 raise RuntimeError(
-                    f"LangExtract 추출 실패 (model: {self.model_id}, url: {self.model_url}): {error_msg}\n"
-                    f"Ollama가 실행 중인지 확인하세요: {self.model_url or 'LLM_BASE_URL 환경변수를 설정하세요'}"
+                    f"LangExtract 추출 실패 (model: {self.model_id}): {error_msg}"
                 ) from e
 
         entities = []
@@ -276,6 +236,113 @@ class StructuredExtractor:
                     "class": ext.extraction_class,
                     "text": ext.extraction_text,
                     "attributes": ext.attributes if hasattr(ext, "attributes") else {},
+                })
+        return entities
+
+    async def _extract_with_llm(
+        self,
+        text: str,
+        profile: str = "general",
+        custom_prompt: Optional[str] = None,
+    ) -> List[Dict]:
+        """Extract entities using direct LLM call (handles long texts natively)."""
+        import httpx
+
+        prof = EXTRACTION_PROFILES.get(profile, EXTRACTION_PROFILES["general"])
+        prompt_desc = custom_prompt or prof["prompt"]
+
+        # Build example JSON from profile
+        example_json = json.dumps(prof["examples"][0]["extractions"], ensure_ascii=False, indent=2) if prof["examples"] else "[]"
+
+        llm_prompt = f"""{prompt_desc}
+
+반드시 아래 JSON 배열 형식으로만 출력하세요. 다른 텍스트 없이 JSON만 출력하세요.
+
+출력 예시:
+{example_json}
+
+분석할 텍스트:
+{text}"""
+
+        # Call LLM directly
+        try:
+            if self.model_url and not self.api_key:
+                # Ollama
+                url = f"{self.model_url}/v1/chat/completions"
+                async with httpx.AsyncClient(timeout=180.0) as client:
+                    resp = await client.post(url, json={
+                        "model": self.model_id,
+                        "messages": [{"role": "user", "content": llm_prompt}],
+                        "stream": False,
+                        "temperature": 0.1,
+                    })
+                    resp.raise_for_status()
+                    content = resp.json()["choices"][0]["message"]["content"]
+            elif self.api_key:
+                # Anthropic
+                async with httpx.AsyncClient(timeout=180.0) as client:
+                    resp = await client.post(
+                        "https://api.anthropic.com/v1/messages",
+                        headers={
+                            "x-api-key": self.api_key,
+                            "anthropic-version": "2023-06-01",
+                            "content-type": "application/json",
+                        },
+                        json={
+                            "model": self.model_id,
+                            "max_tokens": 4096,
+                            "messages": [{"role": "user", "content": llm_prompt}],
+                        },
+                    )
+                    resp.raise_for_status()
+                    content = resp.json()["content"][0]["text"]
+            else:
+                raise RuntimeError("LLM URL 또는 API 키가 설정되지 않았습니다")
+        except httpx.HTTPStatusError as e:
+            raise RuntimeError(f"LLM 추출 호출 실패: {e}") from e
+
+        # Parse JSON from LLM response
+        return self._parse_llm_json(content)
+
+    @staticmethod
+    def _parse_llm_json(content: str) -> List[Dict]:
+        """Parse JSON array from LLM response, handling markdown fences."""
+        content = content.strip()
+
+        # Strip markdown code fences
+        if content.startswith("```"):
+            lines = content.split("\n")
+            lines = lines[1:]  # remove opening ```json or ```
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            content = "\n".join(lines).strip()
+
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            # Try to find JSON array in the response
+            start = content.find("[")
+            end = content.rfind("]")
+            if start != -1 and end != -1:
+                try:
+                    data = json.loads(content[start:end + 1])
+                except json.JSONDecodeError:
+                    logger.warning("Failed to parse LLM extraction response")
+                    return []
+            else:
+                logger.warning("No JSON array found in LLM extraction response")
+                return []
+
+        if not isinstance(data, list):
+            data = [data]
+
+        entities = []
+        for item in data:
+            if isinstance(item, dict) and "class" in item and "text" in item:
+                entities.append({
+                    "class": item["class"],
+                    "text": item["text"],
+                    "attributes": item.get("attributes", {}),
                 })
         return entities
 
@@ -293,8 +360,8 @@ class StructuredExtractor:
         import langextract as lx
         from pathlib import Path
 
-        # Use first chunk for visualization (lx.visualize needs a single result object)
-        viz_text = text[:self.CHUNK_SIZE]
+        # LangExtract visualization needs a single result object; use truncated text
+        viz_text = text[:self.LANGEXTRACT_MAX]
 
         prof = EXTRACTION_PROFILES.get(profile, EXTRACTION_PROFILES["general"])
 
