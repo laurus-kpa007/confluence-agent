@@ -147,6 +147,36 @@ class StructuredExtractor:
         self.model_url = model_url
         self.api_key = api_key
 
+    # Max chars per LangExtract call — LLM-based extraction hangs on large inputs
+    CHUNK_SIZE = 4000
+    CHUNK_OVERLAP = 200
+
+    def _split_into_chunks(self, text: str) -> List[str]:
+        """Split text into chunks that LangExtract can process without hanging."""
+        if len(text) <= self.CHUNK_SIZE:
+            return [text]
+
+        chunks = []
+        start = 0
+        while start < len(text):
+            end = start + self.CHUNK_SIZE
+            # Try to break at paragraph or sentence boundary
+            if end < len(text):
+                # Look for paragraph break
+                para_break = text.rfind("\n\n", start + self.CHUNK_SIZE // 2, end)
+                if para_break > start:
+                    end = para_break
+                else:
+                    # Look for sentence break
+                    for sep in [". ", ".\n", "? ", "! ", "。", "\n"]:
+                        sent_break = text.rfind(sep, start + self.CHUNK_SIZE // 2, end)
+                        if sent_break > start:
+                            end = sent_break + len(sep)
+                            break
+            chunks.append(text[start:end])
+            start = end - self.CHUNK_OVERLAP if end < len(text) else end
+        return chunks
+
     async def extract(
         self,
         text: str,
@@ -155,18 +185,43 @@ class StructuredExtractor:
     ) -> ExtractionResult:
         """Run structured extraction on text.
 
+        Long texts are automatically split into chunks and results are merged.
+
         Args:
             text: Input text to extract from
             profile: Extraction profile (meeting, tech_review, research, general)
             custom_prompt: Override profile prompt with custom instructions
         """
+        chunks = self._split_into_chunks(text)
+        all_entities = []
+
+        for chunk in chunks:
+            chunk_entities = await self._extract_chunk(chunk, profile, custom_prompt)
+            all_entities.extend(chunk_entities)
+
+        # Deduplicate entities with same text
+        seen = set()
+        unique = []
+        for e in all_entities:
+            key = (e["class"], e["text"][:80])
+            if key not in seen:
+                seen.add(key)
+                unique.append(e)
+
+        return ExtractionResult(entities=unique, raw_text=text)
+
+    async def _extract_chunk(
+        self,
+        text: str,
+        profile: str = "general",
+        custom_prompt: Optional[str] = None,
+    ) -> List[Dict]:
+        """Extract entities from a single chunk."""
         import langextract as lx
 
-        # Get profile
         prof = EXTRACTION_PROFILES.get(profile, EXTRACTION_PROFILES["general"])
         prompt = custom_prompt or prof["prompt"]
 
-        # Build examples
         examples = []
         for ex in prof["examples"]:
             extractions = [
@@ -179,17 +234,15 @@ class StructuredExtractor:
             ]
             examples.append(lx.data.ExampleData(text=ex["text"], extractions=extractions))
 
-        # Run extraction
         kwargs = {
             "text_or_documents": text,
             "prompt_description": prompt,
             "examples": examples,
             "model_id": self.model_id,
-            "fence_output": True,  # Enable fence output for better JSON parsing
+            "fence_output": True,
             "use_schema_constraints": False,
         }
 
-        # Use Ollama if model_url provided, otherwise cloud
         if self.model_url and not self.api_key:
             kwargs["model_url"] = self.model_url
         elif self.api_key:
@@ -199,16 +252,10 @@ class StructuredExtractor:
             result = lx.extract(**kwargs)
         except Exception as e:
             error_msg = str(e)
-
-            # Try fallback with fence_output=False if it was a JSON/format parsing error
             if "JSON" in error_msg or "parse" in error_msg.lower() or "extractions" in error_msg.lower():
                 try:
-                    print(f"⚠️  JSON 파싱 오류 발생, fence_output=False로 재시도...")
                     kwargs["fence_output"] = False
-                    # Also try with even smaller chunk
-                    kwargs["text_or_documents"] = text[:len(text)//2] if len(text) > 5000 else text
                     result = lx.extract(**kwargs)
-                    print(f"✅ 재시도 성공!")
                 except Exception as e2:
                     raise RuntimeError(
                         f"LangExtract 추출 실패 (model: {self.model_id}, url: {self.model_url}):\n"
@@ -222,7 +269,6 @@ class StructuredExtractor:
                     f"Ollama가 실행 중인지 확인하세요: {self.model_url or 'LLM_BASE_URL 환경변수를 설정하세요'}"
                 ) from e
 
-        # Parse results
         entities = []
         if hasattr(result, "extractions"):
             for ext in result.extractions:
@@ -231,8 +277,7 @@ class StructuredExtractor:
                     "text": ext.extraction_text,
                     "attributes": ext.attributes if hasattr(ext, "attributes") else {},
                 })
-
-        return ExtractionResult(entities=entities, raw_text=text)
+        return entities
 
     async def extract_with_visualization(
         self,
@@ -241,12 +286,15 @@ class StructuredExtractor:
         output_dir: str = ".",
     ) -> tuple:
         """Run extraction and generate interactive HTML visualization.
-        
+
         Returns:
             (ExtractionResult, html_string)
         """
         import langextract as lx
         from pathlib import Path
+
+        # Use first chunk for visualization (lx.visualize needs a single result object)
+        viz_text = text[:self.CHUNK_SIZE]
 
         prof = EXTRACTION_PROFILES.get(profile, EXTRACTION_PROFILES["general"])
 
@@ -263,7 +311,7 @@ class StructuredExtractor:
             examples.append(lx.data.ExampleData(text=ex["text"], extractions=extractions))
 
         kwargs = {
-            "text_or_documents": text,
+            "text_or_documents": viz_text,
             "prompt_description": prof["prompt"],
             "examples": examples,
             "model_id": self.model_id,
@@ -280,9 +328,7 @@ class StructuredExtractor:
         except Exception as e:
             error_msg = str(e)
             if "JSON" in error_msg or "parse" in error_msg.lower() or "extractions" in error_msg.lower():
-                print(f"⚠️  시각화 추출 오류, fence_output=False로 재시도...")
                 kwargs["fence_output"] = False
-                kwargs["text_or_documents"] = text[:len(text)//2] if len(text) > 5000 else text
                 result = lx.extract(**kwargs)
             else:
                 raise
@@ -299,17 +345,10 @@ class StructuredExtractor:
         elif isinstance(html_content, str):
             html_str = html_content
 
-        # Parse entities
-        entities = []
-        if hasattr(result, "extractions"):
-            for ext in result.extractions:
-                entities.append({
-                    "class": ext.extraction_class,
-                    "text": ext.extraction_text,
-                    "attributes": ext.attributes if hasattr(ext, "attributes") else {},
-                })
+        # Full extraction with chunking for complete entities
+        full_result = await self.extract(text, profile)
 
-        return ExtractionResult(entities=entities, raw_text=text), html_str
+        return full_result, html_str
 
     def format_entities_as_context(self, result: ExtractionResult) -> str:
         """Format extracted entities as structured context for LLM."""

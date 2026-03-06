@@ -335,24 +335,29 @@ class WebUI:
             extraction_context = ""
             if use_langextract:
                 n = len(contents)
-                await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'구조화 추출 중... (0/{n})', 'progress': 25})}\n\n".encode())
+                # Calculate total chunks for accurate progress
+                extractor = self.processor._get_extractor()
+                total_chunks = sum(len(extractor._split_into_chunks(c.text)) for c in contents)
+                chunks_done = 0
+                await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'구조화 추출 중... (0/{n}개 소스, {total_chunks}개 청크)', 'progress': 25})}\n\n".encode())
                 try:
-                    extractor = self.processor._get_extractor()
                     extraction_results = []
                     for idx, c in enumerate(contents, 1):
-                        pct = 25 + round((idx - 1) / n * 25)  # 25% ~ 50%
+                        src_chunks = extractor._split_into_chunks(c.text)
                         try:
-                            await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'구조화 추출 중... ({idx}/{n}) {c.title}', 'progress': pct, 'sub_current': idx, 'sub_total': n})}\n\n".encode())
-                            text_chunk = c.text
-                            result = await extractor.extract(text_chunk, profile=extraction_profile)
+                            pct = 25 + round(chunks_done / total_chunks * 25) if total_chunks else 25
+                            await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'구조화 추출 중... ({idx}/{n}) {c.title} ({len(src_chunks)}청크)', 'progress': pct, 'sub_current': idx, 'sub_total': n})}\n\n".encode())
+                            result = await extractor.extract(c.text, profile=extraction_profile)
                             result.source_title = c.title
                             extraction_results.append(result)
+                            chunks_done += len(src_chunks)
                         except Exception as e:
-                            await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'⚠️ 소스 {idx} 추출 실패: {str(e)[:100]}', 'progress': pct})}\n\n".encode())
+                            chunks_done += len(src_chunks)
+                            await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'⚠️ 소스 {idx} 추출 실패: {str(e)[:100]}', 'progress': 25 + round(chunks_done / total_chunks * 25) if total_chunks else 25})}\n\n".encode())
                     extraction_context = extractor.format_multi_results_as_context(extraction_results)
                     if extraction_context:
                         combined = f"{extraction_context}\n\n---\n\n## 원본 자료\n{combined}"
-                    await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'구조화 추출 완료 ({n}/{n})', 'progress': 50})}\n\n".encode())
+                    await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'구조화 추출 완료 ({n}/{n}개 소스)', 'progress': 50})}\n\n".encode())
                 except Exception as e:
                     extraction_context = f"\n[LangExtract 추출 실패: {e}]\n"
 
