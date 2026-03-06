@@ -337,7 +337,7 @@ class WebUI:
                     for idx, c in enumerate(contents, 1):
                         try:
                             await response.write(f"data: {json.dumps({'type': 'status', 'step': 'langextract', 'message': f'구조화 추출 중... ({idx}/{len(contents)}) {c.title}'})}\n\n".encode())
-                            text_chunk = c.text[:8000]
+                            text_chunk = c.text
                             result = await extractor.extract(text_chunk, profile=extraction_profile)
                             result.source_title = c.title
                             extraction_results.append(result)
@@ -505,7 +505,7 @@ class WebUI:
         try:
             # Extract text from sources
             contents = await self.router.extract_many(sources)
-            combined = "\n\n".join(c.text[:10000] for c in contents)
+            combined = "\n\n".join(c.text for c in contents)
 
             # Run LangExtract with visualization
             from .extractor import StructuredExtractor
@@ -600,7 +600,7 @@ class WebUI:
                 model_url=base_url,
                 api_key=api_key,
             )
-            result = await extractor.extract(combined[:5000], profile=profile)
+            result = await extractor.extract(combined, profile=profile)
 
             # Convert entities to JSON-serializable format
             entities_data = []

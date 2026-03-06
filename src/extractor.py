@@ -180,12 +180,8 @@ class StructuredExtractor:
             examples.append(lx.data.ExampleData(text=ex["text"], extractions=extractions))
 
         # Run extraction
-        # Limit text size more aggressively for stability
-        max_chars = 10000  # Reduce from 50000 to avoid JSON parsing issues
-        text_chunk = text[:max_chars]
-
         kwargs = {
-            "text_or_documents": text_chunk,
+            "text_or_documents": text,
             "prompt_description": prompt,
             "examples": examples,
             "model_id": self.model_id,
@@ -210,7 +206,7 @@ class StructuredExtractor:
                     print(f"⚠️  JSON 파싱 오류 발생, fence_output=False로 재시도...")
                     kwargs["fence_output"] = False
                     # Also try with even smaller chunk
-                    kwargs["text_or_documents"] = text[:5000]
+                    kwargs["text_or_documents"] = text[:len(text)//2] if len(text) > 5000 else text
                     result = lx.extract(**kwargs)
                     print(f"✅ 재시도 성공!")
                 except Exception as e2:
@@ -266,9 +262,8 @@ class StructuredExtractor:
             ]
             examples.append(lx.data.ExampleData(text=ex["text"], extractions=extractions))
 
-        max_chars = 10000
         kwargs = {
-            "text_or_documents": text[:max_chars],
+            "text_or_documents": text,
             "prompt_description": prof["prompt"],
             "examples": examples,
             "model_id": self.model_id,
@@ -287,7 +282,7 @@ class StructuredExtractor:
             if "JSON" in error_msg or "parse" in error_msg.lower() or "extractions" in error_msg.lower():
                 print(f"⚠️  시각화 추출 오류, fence_output=False로 재시도...")
                 kwargs["fence_output"] = False
-                kwargs["text_or_documents"] = text[:5000]
+                kwargs["text_or_documents"] = text[:len(text)//2] if len(text) > 5000 else text
                 result = lx.extract(**kwargs)
             else:
                 raise

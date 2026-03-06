@@ -74,7 +74,7 @@ class LLMProcessor:
                 extraction_results = []
                 for c in contents:
                     try:
-                        text_chunk = c.text[:8000]
+                        text_chunk = c.text
                         result = await extractor.extract(
                             text_chunk,
                             profile=extraction_profile,
@@ -103,7 +103,7 @@ class LLMProcessor:
             header = f"--- 소스 {i}: [{c.source_type}] {c.title} ---"
             if c.source_url:
                 header += f"\nURL: {c.source_url}"
-            parts.append(f"{header}\n{c.text[:10000]}")  # Limit per source
+            parts.append(f"{header}\n{c.text}")
         return "\n\n".join(parts)
 
     async def _call_llm(self, prompt: str) -> str:
